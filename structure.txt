@@ -1,0 +1,66 @@
+KoboWave/
+├── 📁 backend/
+│   ├── 📁 routes/
+│   │   ├── 🟨 movies.js
+│   │   ├── 🟨 reviews.js
+│   │   └── 🟨 restaurants.js
+│   ├── 📁 controllers/
+│   │   ├── 🟨 movieController.js
+│   │   ├── 🟨 reviewController.js
+│   │   └── 🟨 restaurantController.js
+│   ├── 📁 middleware/
+│   │   ├── 🟨 authMiddleware.js
+│   │   ├── 🟨 validationMiddleware.js
+│   │   └── 🟨 errorMiddleware.js
+│   ├── 📁 models/
+│   │   ├── 🟨 Review.js
+│   │   └── 🟨 User.js
+│   ├── 📁 config/
+│   │   ├── 🟨 firebase.js
+│   │   └── 🟨 database.js
+│   ├── 🟨 server.js
+│   ├── 🟨 .env
+│   ├── 🟨 package.json
+│   └── 🟨 package-lock.json
+│
+├── 📁 frontend/
+│   ├── 📁 public/
+│   │   ├── 🟨 index.html
+│   │   ├── 🟨 favicon.ico
+│   │   └── 🟨 manifest.json
+│   ├── 📁 src/
+│   │   ├── 📁 components/
+│   │   │   ├── 🟨 Navbar.js
+│   │   │   ├── 🟨 Footer.js
+│   │   │   ├── 🟨 ReviewCard.js
+│   │   │   ├── 🟨 MovieCard.js
+│   │   │   ├── 🟨 RestaurantCard.js
+│   │   │   ├── 🟨 SearchBar.js
+│   │   │   ├── 🟨 Rating.js
+│   │   │   └── 🟨 ProtectedRoute.js
+│   │   ├── 📁 pages/
+│   │   │   ├── 🟨 Home.js
+│   │   │   ├── 🟨 MovieSearch.js
+│   │   │   ├── 🟨 RestaurantSearch.js
+│   │   │   ├── 🟨 Reviews.js
+│   │   │   ├── 🟨 MyReviews.js
+│   │   │   ├── 🟨 About.js
+│   │   │   └── 🟨 Login.js
+│   │   ├── 📁 services/
+│   │   │   ├── 🟨 api.js
+│   │   │   └── 🟨 authService.js
+│   │   ├── 📁 contexts/
+│   │   │   └── 🟨 AuthContext.js
+│   │   ├── 📁 config/
+│   │   │   ├── 🟨 firebase.js
+│   │   │   └── 🟨 constants.js
+│   │   ├── 🟨 App.js
+│   │   ├── 🟨 App.css
+│   │   ├── 🟨 index.js
+│   │   ├── 🟨 index.css
+│   │   └── 🟨 reportWebVitals.js
+│   ├── 🟨 package.json
+│   └── 🟨 package-lock.json
+│
+├── 🟨 package.json
+└── 🟨 package-lock.json

@@ -1,0 +1,99 @@
+/* KoboWave Custom Styles */
+.App {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1;
+  padding-bottom: 2rem;
+}
+
+/* Navbar Styles */
+.navbar-brand {
+  font-weight: bold;
+  font-size: 1.5rem;
+}
+
+/* Card Styles */
+.card {
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Hero Section */
+.hero-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 4rem 0;
+}
+
+/* Feature Cards */
+.feature-card {
+  border: none;
+  border-radius: 10px;
+  transition: all 0.3s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+/* Rating Stars */
+.rating-stars {
+  color: #ffc107;
+  font-size: 1.2rem;
+}
+
+/* Search Results */
+.search-results {
+  margin-top: 2rem;
+}
+
+/* Review Cards */
+.review-card {
+  border-left: 4px solid #007bff;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .hero-section {
+    padding: 2rem 0;
+    text-align: center;
+  }
+
+  .display-4 {
+    font-size: 2rem;
+  }
+}
+
+/* Loading Spinner */
+.loading-spinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+}
+
+/* Custom Colors */
+.text-kobo {
+  color: #ff6b6b !important;
+}
+
+.text-wave {
+  color: #4ecdc4 !important;
+}
+
+.bg-kobo {
+  background-color: #ff6b6b !important;
+}
+
+.bg-wave {
+  background-color: #4ecdc4 !important;
+}
