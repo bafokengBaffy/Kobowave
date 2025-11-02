@@ -66,94 +66,39 @@ const Home = () => {
       try {
         setLoading(true);
 
-        // Fetch data concurrently
-        const [
-          reviewsResponse,
-          moviesResponse,
-          restaurantsResponse,
-          usersSnapshot,
-        ] = await Promise.all([
-          reviewAPI.getAll(),
-          movieAPI.getPopular(),
-          restaurantAPI.getAll(),
-          getDocs(collection(db, "users")),
-        ]);
+        // Fetch data - APIs now return arrays directly
+        const [reviewsData, moviesData, restaurantsData, usersSnapshot] =
+          await Promise.all([
+            reviewAPI.getAll(),
+            movieAPI.getPopular(),
+            restaurantAPI.getAll(),
+            getDocs(collection(db, "users")),
+          ]);
 
-        console.log("Movies API Response:", moviesResponse.data);
-        console.log("Restaurants API Response:", restaurantsResponse.data);
-        console.log("Reviews API Response:", reviewsResponse.data);
-
-        // Process reviews data
-        const allReviews = reviewsResponse.data?.data || [];
-        setRecentReviews(allReviews.slice(0, 3)); // Show 3 most recent reviews
-
-        // Process movies data - handle both TMDB and OMDB formats and remove duplicates
-        const moviesData =
-          moviesResponse.data?.data?.results || moviesResponse.data?.data || [];
-        console.log("Raw movies data:", moviesData);
-
-        // Remove duplicate movies based on imdbID or title
-        const uniqueMoviesMap = new Map();
-
-        moviesData.forEach((movie, index) => {
-          // Handle different movie data structures
-          const movieData = {
-            // TMDB format
-            id: movie.id,
-            title: movie.title || movie.Title,
-            poster_path: movie.poster_path,
-            release_date: movie.release_date || movie.Year,
-            vote_average: movie.vote_average,
-            // OMDB format fallbacks
-            Poster: movie.Poster,
-            Year: movie.Year,
-            Type: movie.Type,
-            imdbID: movie.imdbID,
-            // Ensure unique ID
-            uniqueId: movie.id
-              ? `movie-${movie.id}`
-              : movie.imdbID
-              ? `movie-${movie.imdbID}-${index}`
-              : `movie-temp-${index}-${Date.now()}`,
-          };
-
-          // Use imdbID as key if available, otherwise use title + year
-          const uniqueKey =
-            movie.imdbID ||
-            `${movie.title || movie.Title}-${movie.Year || index}`;
-
-          if (!uniqueMoviesMap.has(uniqueKey)) {
-            uniqueMoviesMap.set(uniqueKey, movieData);
-          }
-        });
-
-        const uniqueMovies = Array.from(uniqueMoviesMap.values());
-        const popularMoviesSlice = uniqueMovies.slice(0, 6);
-
-        setPopularMovies(popularMoviesSlice);
-        console.log("Processed unique movies:", popularMoviesSlice);
-
-        // Process restaurants data
-        const restaurantsData = restaurantsResponse.data?.data || [];
+        console.log("Movies data:", moviesData);
         console.log("Restaurants data:", restaurantsData);
+        console.log("Reviews data:", reviewsData);
+
+        // Process data - they are already arrays
+        setRecentReviews(reviewsData.slice(0, 3));
+        setPopularMovies(moviesData.slice(0, 6));
         setFeaturedRestaurants(restaurantsData.slice(0, 3));
 
         // Calculate stats
-        const movieReviews = allReviews.filter(
+        const movieReviews = reviewsData.filter(
           (review) => review.type === "movie"
         ).length;
-        const totalUsers = usersSnapshot.size;
 
         setStats({
           moviesReviewed: movieReviews,
           restaurantsListed: restaurantsData.length,
-          communityReviews: allReviews.length,
-          activeUsers: totalUsers,
+          communityReviews: reviewsData.length,
+          activeUsers: usersSnapshot.size,
         });
       } catch (err) {
         console.error("Error fetching home data:", err);
         setError(
-          "Failed to load some data. Some features may not be available."
+          "Some features may not be available due to connection issues."
         );
       } finally {
         setLoading(false);

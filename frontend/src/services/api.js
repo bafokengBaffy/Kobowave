@@ -28,11 +28,11 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  timeout: 15000, // Increased timeout to 15 seconds
-  withCredentials: false, // Set to true if using cookies/auth
+  timeout: 15000,
+  withCredentials: false,
 });
 
-// Request interceptor with enhanced logging
+// Request interceptor
 api.interceptors.request.use(
   (config) => {
     const fullUrl = `${config.baseURL}${config.url}`;
@@ -40,7 +40,6 @@ api.interceptors.request.use(
       `🚀 Making ${config.method?.toUpperCase()} request to: ${config.url}`
     );
     console.log(`🌍 Full URL: ${fullUrl}`);
-    console.log(`⏰ Timeout: ${config.timeout}ms`);
     return config;
   },
   (error) => {
@@ -49,7 +48,7 @@ api.interceptors.request.use(
   }
 );
 
-// Enhanced response interceptor with better error handling
+// Response interceptor
 api.interceptors.response.use(
   (response) => {
     console.log(
@@ -66,40 +65,15 @@ api.interceptors.response.use(
       code: code,
       message: message,
       status: response?.status,
-      statusText: response?.statusText,
     });
 
-    // Handle different error types
     if (error.code === "ECONNABORTED") {
-      console.error(
-        "⏰ Request timeout - Backend server is not responding within 15 seconds"
-      );
-      console.error("💡 Possible solutions:");
-      console.error("   1. Check if backend is deployed and running");
-      console.error("   2. Verify the backend URL is correct");
-      console.error("   3. Check backend logs for errors");
+      console.error("⏰ Request timeout - Backend server is not responding");
     } else if (
       error.code === "ECONNREFUSED" ||
       error.message === "Network Error"
     ) {
       console.error("🚨 Backend server is not running or connection refused");
-      console.error("💡 Please make sure your backend server is running");
-      console.error(`   Backend URL: ${API_BASE_URL}`);
-    } else if (error.response) {
-      // Server responded with error status
-      switch (error.response.status) {
-        case 404:
-          console.error("📭 Endpoint not found - check backend routes");
-          break;
-        case 500:
-          console.error("🔧 Server error - check backend logs");
-          break;
-        case 503:
-          console.error("🛠️ Service unavailable - backend might be starting");
-          break;
-        default:
-          console.error(`📊 Server error: ${error.response.status}`);
-      }
     }
 
     return Promise.reject({
@@ -126,136 +100,221 @@ function getErrorMessage(error) {
   return "An unexpected error occurred.";
 }
 
-// Movie API calls with error handling
+// Enhanced data extraction helper
+const extractData = (response) => {
+  // Handle different response structures
+  if (!response.data) {
+    return null;
+  }
+
+  // If response has success field and data field
+  if (response.data.success && response.data.data !== undefined) {
+    return response.data.data;
+  }
+
+  // If response is directly the data array/object
+  if (Array.isArray(response.data) || typeof response.data === "object") {
+    return response.data;
+  }
+
+  // Fallback: return the entire response data
+  return response.data;
+};
+
+// Movie API calls with enhanced data handling
 export const movieAPI = {
   getPopular: async () => {
     try {
       const response = await api.get("/movies/popular");
-      return response.data;
+      const data = extractData(response);
+
+      // Handle different movie data structures
+      if (data && data.results) {
+        return data.results; // TMDB-style structure
+      }
+      if (Array.isArray(data)) {
+        return data; // Direct array
+      }
+      if (data && Array.isArray(data.data)) {
+        return data.data; // Nested data structure
+      }
+
+      console.warn("Unexpected movie data structure:", data);
+      return data || [];
     } catch (error) {
       console.error("Failed to fetch popular movies:", error);
-      // Return fallback data or re-throw
-      throw error;
+      // Return empty array as fallback
+      return [];
     }
   },
+
   search: async (query) => {
     try {
       const response = await api.get(
         `/movies/search?query=${encodeURIComponent(query)}`
       );
-      return response.data;
+      const data = extractData(response);
+
+      if (data && data.results) {
+        return data.results;
+      }
+      if (Array.isArray(data)) {
+        return data;
+      }
+
+      return data || [];
     } catch (error) {
       console.error("Movie search failed:", error);
-      throw error;
+      return [];
     }
   },
+
   getDetails: async (id) => {
     try {
       const response = await api.get(`/movies/${id}`);
-      return response.data;
+      return extractData(response);
     } catch (error) {
       console.error("Failed to fetch movie details:", error);
-      throw error;
+      return null;
     }
   },
 };
 
-// Restaurant API calls with error handling
+// Restaurant API calls with enhanced data handling
 export const restaurantAPI = {
   getAll: async () => {
     try {
       const response = await api.get("/restaurants");
-      return response.data;
+      const data = extractData(response);
+
+      if (Array.isArray(data)) {
+        return data;
+      }
+      if (data && Array.isArray(data.data)) {
+        return data.data;
+      }
+
+      console.warn("Unexpected restaurant data structure:", data);
+      return data || [];
     } catch (error) {
       console.error("Failed to fetch restaurants:", error);
-      throw error;
+      return [];
     }
   },
+
   search: async (query) => {
     try {
       const response = await api.get(
         `/restaurants/search?query=${encodeURIComponent(query)}`
       );
-      return response.data;
+      const data = extractData(response);
+
+      if (data && data.results) {
+        return data.results;
+      }
+      if (Array.isArray(data)) {
+        return data;
+      }
+
+      return data || [];
     } catch (error) {
       console.error("Restaurant search failed:", error);
-      throw error;
+      return [];
     }
   },
+
   getDetails: async (id) => {
     try {
       const response = await api.get(`/restaurants/${id}`);
-      return response.data;
+      return extractData(response);
     } catch (error) {
       console.error("Failed to fetch restaurant details:", error);
-      throw error;
+      return null;
     }
   },
 };
 
-// Review API calls with enhanced error handling
+// Review API calls with enhanced data handling
 export const reviewAPI = {
   getAll: async (params = {}) => {
     try {
       const response = await api.get("/reviews", { params });
-      return response.data;
+      const data = extractData(response);
+
+      if (Array.isArray(data)) {
+        return data;
+      }
+      if (data && Array.isArray(data.data)) {
+        return data.data;
+      }
+
+      console.warn("Unexpected review data structure:", data);
+      return data || [];
     } catch (error) {
       console.error("Failed to fetch reviews:", error);
-      throw error;
+      return [];
     }
   },
+
   getByMovie: async (movieId) => {
     try {
       const response = await api.get(`/reviews/movie/${movieId}`);
-      return response.data;
+      const data = extractData(response);
+      return Array.isArray(data) ? data : [];
     } catch (error) {
       console.error(`Failed to fetch reviews for movie ${movieId}:`, error);
-      throw error;
+      return [];
     }
   },
+
   getByRestaurant: async (restaurantId) => {
     try {
       const response = await api.get(`/reviews/restaurant/${restaurantId}`);
-      return response.data;
+      const data = extractData(response);
+      return Array.isArray(data) ? data : [];
     } catch (error) {
       console.error(
         `Failed to fetch reviews for restaurant ${restaurantId}:`,
         error
       );
-      throw error;
+      return [];
     }
   },
+
   getById: async (id) => {
     try {
       const response = await api.get(`/reviews/${id}`);
-      return response.data;
+      return extractData(response);
     } catch (error) {
       console.error(`Failed to fetch review ${id}:`, error);
-      throw error;
+      return null;
     }
   },
+
   create: async (reviewData) => {
     try {
       const response = await api.post("/reviews", reviewData);
-      return response.data;
+      return extractData(response);
     } catch (error) {
       console.error("Failed to create review:", error);
       throw error;
     }
   },
+
   update: async (id, reviewData) => {
     try {
       const response = await api.put(`/reviews/${id}`, reviewData);
-      return response.data;
+      return extractData(response);
     } catch (error) {
       console.error(`Failed to update review ${id}:`, error);
       throw error;
     }
   },
+
   delete: async (id) => {
     try {
       const response = await api.delete(`/reviews/${id}`);
-      return response.data;
+      return extractData(response);
     } catch (error) {
       console.error(`Failed to delete review ${id}:`, error);
       throw error;
@@ -263,20 +322,18 @@ export const reviewAPI = {
   },
 };
 
-// Health check with retry logic
-export const healthCheck = async (retries = 3) => {
+// Health check with better error handling
+export const healthCheck = async (retries = 2) => {
   for (let i = 0; i < retries; i++) {
     try {
       const response = await api.get("/health");
       console.log("✅ Backend health check passed");
-      return response.data;
+      return extractData(response);
     } catch (error) {
       console.warn(`⚠️ Health check attempt ${i + 1} failed:`, error.message);
       if (i === retries - 1) {
-        console.error("❌ All health check attempts failed");
         throw error;
       }
-      // Wait before retry
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
   }
@@ -286,14 +343,14 @@ export const healthCheck = async (retries = 3) => {
 export const testBackendConnection = async () => {
   try {
     const health = await healthCheck();
-    console.log("🔗 Backend connection test:", health);
+    console.log("🔗 Backend connection test successful");
     return { success: true, data: health };
   } catch (error) {
-    console.error("🔗 Backend connection test failed:", error.message);
+    console.error("🔗 Backend connection test failed");
     return {
       success: false,
       error: error.message,
-      suggestion: "Check if backend is deployed and running",
+      suggestion: "Backend server may be down or starting up",
     };
   }
 };
