@@ -1,18 +1,18 @@
 // src/pages/Reviews.js
-import { useEffect, useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  Col,
   Container,
-  Form,
   Row,
+  Col,
+  Alert,
   Spinner,
+  Button,
+  Form,
+  Card,
+  Badge,
 } from "react-bootstrap";
-import { useAuth } from "../contexts/AuthContext";
 import { reviewAPI } from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
 
 const Reviews = () => {
   const [reviews, setReviews] = useState([]);
@@ -21,14 +21,16 @@ const Reviews = () => {
   const [filter, setFilter] = useState("all");
   const { currentUser } = useAuth();
 
+  // Add ref to track if data has been loaded
+  const hasLoadedRef = useRef(false);
+
   const loadReviews = async () => {
     setLoading(true);
     setError("");
     try {
       const params = filter !== "all" ? { type: filter } : {};
-      const response = await reviewAPI.getAll(params);
-      // Handle different response structures
-      const reviewsData = response.data?.data || response.data || [];
+      const reviewsData = await reviewAPI.getAll(params);
+      console.log("📝 All reviews loaded:", reviewsData);
       setReviews(Array.isArray(reviewsData) ? reviewsData : []);
     } catch (err) {
       setError("Failed to load reviews. Make sure backend is running.");
@@ -53,7 +55,10 @@ const Reviews = () => {
   };
 
   useEffect(() => {
-    loadReviews();
+    if (!hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      loadReviews();
+    }
   }, [filter]);
 
   const ReviewCard = ({ review, onDelete }) => (

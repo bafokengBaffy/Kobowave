@@ -1,5 +1,5 @@
 // src/pages/MyReviews.js
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Alert,
   Badge,
@@ -24,6 +24,9 @@ const MyReviews = () => {
   const [backendStatus, setBackendStatus] = useState("checking");
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Add ref to track if data has been loaded
+  const hasLoadedRef = useRef(false);
 
   // Review form state
   const [reviewForm, setReviewForm] = useState({
@@ -189,7 +192,8 @@ const MyReviews = () => {
   };
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && !hasLoadedRef.current) {
+      hasLoadedRef.current = true;
       loadUserReviews();
     }
   }, [currentUser]);

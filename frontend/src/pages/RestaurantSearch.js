@@ -1,15 +1,16 @@
 // src/pages/RestaurantSearch.js
-import React, { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  Container,
-  Row,
-  Col,
   Alert,
-  Spinner,
-  Modal,
+  Badge,
   Button,
   Card,
-  Badge,
+  Col,
+  Container,
+  Form,
+  Modal,
+  Row,
+  Spinner,
 } from "react-bootstrap";
 import { restaurantAPI } from "../services/api";
 
@@ -20,19 +21,19 @@ const RestaurantSearch = () => {
   const [selectedRestaurant, setSelectedRestaurant] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
+  // Add ref to track if data has been loaded
+  const hasLoadedRef = useRef(false);
+
   const loadRestaurants = async () => {
     setLoading(true);
     setError("");
     try {
-      const response = await restaurantAPI.getAll();
-      // Handle different response structures
-      const restaurantsData = response.data?.data || response.data || [];
+      const restaurantsData = await restaurantAPI.getAll();
+      console.log("🍽️ Restaurants loaded:", restaurantsData);
       setRestaurants(Array.isArray(restaurantsData) ? restaurantsData : []);
     } catch (err) {
       const errorMessage =
-        err.response?.data?.error ||
-        err.message ||
-        "Failed to load restaurants.";
+        err.userMessage || err.message || "Failed to load restaurants.";
       setError(errorMessage);
       console.error("Restaurant load error:", err);
 
@@ -57,13 +58,12 @@ const RestaurantSearch = () => {
     setError("");
 
     try {
-      const response = await restaurantAPI.search(query);
-      // Handle different response structures
-      const restaurantsData = response.data?.data || response.data || [];
+      const restaurantsData = await restaurantAPI.search(query);
+      console.log("🍽️ Search results:", restaurantsData);
       setRestaurants(Array.isArray(restaurantsData) ? restaurantsData : []);
     } catch (err) {
       const errorMessage =
-        err.response?.data?.error ||
+        err.userMessage ||
         err.message ||
         "Failed to search restaurants. Please try again.";
       setError(errorMessage);
@@ -79,7 +79,10 @@ const RestaurantSearch = () => {
   };
 
   useEffect(() => {
-    loadRestaurants();
+    if (!hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      loadRestaurants();
+    }
   }, []);
 
   // Restaurant Card Component
@@ -88,17 +91,17 @@ const RestaurantSearch = () => {
       <Card.Body className="d-flex flex-column">
         <div className="d-flex justify-content-between align-items-start mb-2">
           <Card.Title className="flex-grow-1" style={{ fontSize: "1.1rem" }}>
-            {restaurant.name}
+            {restaurant.name || "Unknown Restaurant"}
           </Card.Title>
           <Badge bg="success">⭐ {restaurant.rating || "N/A"}</Badge>
         </div>
 
         <Card.Text className="text-muted mb-2">
-          <strong>Cuisine:</strong> {restaurant.cuisine}
+          <strong>Cuisine:</strong> {restaurant.cuisine || "Not specified"}
         </Card.Text>
 
         <Card.Text className="text-muted mb-2">
-          <strong>Location:</strong> 📍 {restaurant.location}
+          <strong>Location:</strong> 📍 {restaurant.location || "Not specified"}
         </Card.Text>
 
         {restaurant.priceRange && (
@@ -131,39 +134,42 @@ const RestaurantSearch = () => {
     };
 
     return (
-      <form onSubmit={handleSubmit} className="mb-4">
-        <div className="input-group">
-          <input
-            type="text"
-            className="form-control"
-            placeholder={placeholder}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            disabled={loading}
-          />
-          <button
-            type="submit"
-            className="btn btn-success"
-            disabled={loading || !query.trim()}
-          >
-            {loading ? (
-              <>
-                <Spinner
-                  as="span"
-                  animation="border"
-                  size="sm"
-                  role="status"
-                  aria-hidden="true"
-                  className="me-2"
-                />
-                Searching...
-              </>
-            ) : (
-              "Search"
-            )}
-          </button>
-        </div>
-      </form>
+      <Form onSubmit={handleSubmit} className="mb-4">
+        <Row className="g-2">
+          <Col>
+            <Form.Control
+              type="text"
+              placeholder={placeholder}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              disabled={loading}
+            />
+          </Col>
+          <Col xs="auto">
+            <Button
+              type="submit"
+              variant="success"
+              disabled={loading || !query.trim()}
+            >
+              {loading ? (
+                <>
+                  <Spinner
+                    as="span"
+                    animation="border"
+                    size="sm"
+                    role="status"
+                    aria-hidden="true"
+                    className="me-2"
+                  />
+                  Searching...
+                </>
+              ) : (
+                "Search"
+              )}
+            </Button>
+          </Col>
+        </Row>
+      </Form>
     );
   };
 
@@ -251,13 +257,16 @@ const RestaurantSearch = () => {
           {selectedRestaurant && (
             <div>
               <div className="mb-3">
-                <strong>Cuisine:</strong> {selectedRestaurant.cuisine}
+                <strong>Cuisine:</strong>{" "}
+                {selectedRestaurant.cuisine || "Not specified"}
               </div>
               <div className="mb-3">
-                <strong>Location:</strong> 📍 {selectedRestaurant.location}
+                <strong>Location:</strong> 📍{" "}
+                {selectedRestaurant.location || "Not specified"}
               </div>
               <div className="mb-3">
-                <strong>Price Range:</strong> {selectedRestaurant.priceRange}
+                <strong>Price Range:</strong>{" "}
+                {selectedRestaurant.priceRange || "Not specified"}
               </div>
               <div className="mb-3">
                 <strong>Rating:</strong>{" "}
@@ -267,7 +276,10 @@ const RestaurantSearch = () => {
               </div>
               <div className="mb-3">
                 <strong>Description:</strong>
-                <p className="mt-1">{selectedRestaurant.description}</p>
+                <p className="mt-1">
+                  {selectedRestaurant.description ||
+                    "No description available."}
+                </p>
               </div>
 
               <div className="d-flex gap-2">
