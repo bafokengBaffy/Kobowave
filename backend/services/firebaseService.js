@@ -1,23 +1,47 @@
-// backend/services/firebaseService.js
 const admin = require("firebase-admin");
-const path = require("path");
-const fs = require("fs");
 
 // Initialize Firebase Admin
 const initializeFirebase = () => {
   if (!admin.apps.length) {
     try {
-      const serviceAccountPath = path.join(
-        __dirname,
-        "../config/firebase-service-account.json"
-      );
+      let serviceAccount;
 
-      // Check if file exists
-      if (!fs.existsSync(serviceAccountPath)) {
-        throw new Error("Firebase service account file not found");
+      // Check for environment variables first (for production)
+      if (process.env.FIREBASE_PRIVATE_KEY) {
+        console.log("Using environment variables for Firebase configuration");
+
+        serviceAccount = {
+          type: "service_account",
+          project_id: process.env.FIREBASE_PROJECT_ID || "kobowave",
+          private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+          client_email: process.env.FIREBASE_CLIENT_EMAIL,
+          client_id: process.env.FIREBASE_CLIENT_ID,
+          auth_uri: "https://accounts.google.com/o/oauth2/auth",
+          token_uri: "https://oauth2.googleapis.com/token",
+          auth_provider_x509_cert_url:
+            "https://www.googleapis.com/oauth2/v1/certs",
+          client_x509_cert_url: process.env.FIREBASE_CLIENT_CERT_URL,
+          universe_domain: "googleapis.com",
+        };
+      } else {
+        // For local development - try to use service account file
+        console.log("Using service account file for Firebase configuration");
+
+        // Try to require the service account file
+        try {
+          serviceAccount = require("../config/firebase-service-account.json");
+        } catch (fileError) {
+          throw new Error(
+            "Firebase service account file not found and no environment variables configured. " +
+              "Please set FIREBASE_PRIVATE_KEY environment variable or add service account file."
+          );
+        }
       }
 
-      const serviceAccount = require(serviceAccountPath);
+      // Validate required service account fields
+      if (!serviceAccount.project_id) {
+        throw new Error("Firebase project ID is required");
+      }
 
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
@@ -26,16 +50,17 @@ const initializeFirebase = () => {
       });
 
       console.log("✅ Firebase Admin initialized successfully");
-      return admin.firestore();
+      return admin;
     } catch (error) {
       console.error("❌ Firebase initialization failed:", error.message);
       throw error;
     }
   }
-  return admin.firestore();
+  return admin;
 };
 
-const db = initializeFirebase();
+const firebaseApp = initializeFirebase();
+const db = firebaseApp.firestore();
 
 // Auto-create collections if they don't exist
 const initializeCollections = async () => {
@@ -72,14 +97,32 @@ const initializeCollections = async () => {
   console.log("✅ All collections initialized");
 };
 
+// Helper function to convert Firestore data to plain objects
+const convertFirestoreTimestamps = (data) => {
+  if (!data) return data;
+
+  const converted = { ...data };
+
+  // Convert Firestore Timestamps to ISO strings
+  if (converted.createdAt && typeof converted.createdAt.toDate === "function") {
+    converted.createdAt = converted.createdAt.toDate().toISOString();
+  }
+
+  if (converted.updatedAt && typeof converted.updatedAt.toDate === "function") {
+    converted.updatedAt = converted.updatedAt.toDate().toISOString();
+  }
+
+  return converted;
+};
+
 // Review operations
 const reviewService = {
-  // Get all reviews with optional filtering - OPTIMIZED with index
+  // Get all reviews with optional filtering
   getAllReviews: async (filters = {}) => {
     try {
       let query = db.collection("reviews");
 
-      // Apply filters - now these will use the composite index
+      // Apply filters
       if (filters.type) {
         query = query.where("type", "==", filters.type);
       }
@@ -90,20 +133,14 @@ const reviewService = {
         query = query.where("authorId", "==", filters.authorId);
       }
 
-      // Order by createdAt descending - this uses the composite index
+      // Order by createdAt descending
       const snapshot = await query.orderBy("createdAt", "desc").get();
       const reviews = [];
 
       snapshot.forEach((doc) => {
-        const data = doc.data();
         reviews.push({
           id: doc.id,
-          ...data,
-          // Convert Firestore timestamps to ISO strings
-          createdAt:
-            data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
-          updatedAt:
-            data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
+          ...convertFirestoreTimestamps(doc.data()),
         });
       });
 
@@ -146,11 +183,7 @@ const reviewService = {
 
       return {
         id: createdDoc.id,
-        ...data,
-        createdAt:
-          data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        updatedAt:
-          data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+        ...convertFirestoreTimestamps(data),
       };
     } catch (error) {
       console.error("Error creating review:", error);
@@ -162,6 +195,13 @@ const reviewService = {
   updateReview: async (reviewId, updateData) => {
     try {
       const reviewRef = db.collection("reviews").doc(reviewId);
+
+      // Check if review exists
+      const reviewDoc = await reviewRef.get();
+      if (!reviewDoc.exists) {
+        throw new Error("Review not found");
+      }
+
       const updateDataWithTimestamp = {
         ...updateData,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -171,16 +211,11 @@ const reviewService = {
 
       // Get the updated review
       const updatedDoc = await reviewRef.get();
-      if (!updatedDoc.exists) {
-        throw new Error("Review not found after update");
-      }
-
       const data = updatedDoc.data();
+
       return {
         id: updatedDoc.id,
-        ...data,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
-        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
+        ...convertFirestoreTimestamps(data),
       };
     } catch (error) {
       console.error("Error updating review:", error);
@@ -202,13 +237,8 @@ const reviewService = {
       await reviewRef.delete();
 
       return {
-        ...reviewData,
-        createdAt:
-          reviewData.createdAt?.toDate?.()?.toISOString() ||
-          reviewData.createdAt,
-        updatedAt:
-          reviewData.updatedAt?.toDate?.()?.toISOString() ||
-          reviewData.updatedAt,
+        id: reviewId,
+        ...convertFirestoreTimestamps(reviewData),
       };
     } catch (error) {
       console.error("Error deleting review:", error);
@@ -229,9 +259,7 @@ const reviewService = {
       const data = reviewDoc.data();
       return {
         id: reviewDoc.id,
-        ...data,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
-        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
+        ...convertFirestoreTimestamps(data),
       };
     } catch (error) {
       console.error("Error getting review:", error);
@@ -244,5 +272,5 @@ module.exports = {
   db,
   initializeCollections,
   reviewService,
-  admin,
+  admin: firebaseApp,
 };
