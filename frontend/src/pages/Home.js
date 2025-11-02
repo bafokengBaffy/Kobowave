@@ -1,7 +1,9 @@
+// src/pages/Home.js
 import { collection, getDocs } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Badge,
   Button,
   Card,
   Col,
@@ -28,6 +30,9 @@ const Home = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { currentUser } = useAuth();
+
+  // Add ref to prevent duplicate calls
+  const hasLoadedRef = useRef(false);
 
   const features = [
     {
@@ -63,10 +68,17 @@ const Home = () => {
   // Fetch real data from APIs and Firebase
   useEffect(() => {
     const fetchHomeData = async () => {
+      // Prevent duplicate calls in development
+      if (hasLoadedRef.current) return;
+      hasLoadedRef.current = true;
+
       try {
         setLoading(true);
+        setError("");
 
-        // Fetch data - APIs now return arrays directly
+        console.log("🏠 Starting to fetch home page data...");
+
+        // Fetch data from all APIs
         const [reviewsData, moviesData, restaurantsData, usersSnapshot] =
           await Promise.all([
             reviewAPI.getAll(),
@@ -75,28 +87,39 @@ const Home = () => {
             getDocs(collection(db, "users")),
           ]);
 
-        console.log("Movies data:", moviesData);
-        console.log("Restaurants data:", restaurantsData);
-        console.log("Reviews data:", reviewsData);
+        console.log("✅ Home data loaded:", {
+          movies: moviesData,
+          restaurants: restaurantsData,
+          reviews: reviewsData,
+          users: usersSnapshot.size,
+        });
 
-        // Process data - they are already arrays
-        setRecentReviews(reviewsData.slice(0, 3));
-        setPopularMovies(moviesData.slice(0, 6));
-        setFeaturedRestaurants(restaurantsData.slice(0, 3));
+        // Process and set data
+        setRecentReviews(
+          Array.isArray(reviewsData) ? reviewsData.slice(0, 3) : []
+        );
+        setPopularMovies(
+          Array.isArray(moviesData) ? moviesData.slice(0, 6) : []
+        );
+        setFeaturedRestaurants(
+          Array.isArray(restaurantsData) ? restaurantsData.slice(0, 3) : []
+        );
 
         // Calculate stats
-        const movieReviews = reviewsData.filter(
-          (review) => review.type === "movie"
-        ).length;
+        const movieReviews = Array.isArray(reviewsData)
+          ? reviewsData.filter((review) => review.type === "movie").length
+          : 0;
 
         setStats({
           moviesReviewed: movieReviews,
-          restaurantsListed: restaurantsData.length,
-          communityReviews: reviewsData.length,
+          restaurantsListed: Array.isArray(restaurantsData)
+            ? restaurantsData.length
+            : 0,
+          communityReviews: Array.isArray(reviewsData) ? reviewsData.length : 0,
           activeUsers: usersSnapshot.size,
         });
       } catch (err) {
-        console.error("Error fetching home data:", err);
+        console.error("❌ Error fetching home data:", err);
         setError(
           "Some features may not be available due to connection issues."
         );
@@ -108,71 +131,64 @@ const Home = () => {
     fetchHomeData();
   }, []);
 
+  // Movie Card Component
   const MovieCard = ({ movie }) => {
-    // Determine image source based on available data
-    const getImageSrc = () => {
-      if (movie.poster_path) {
-        return `https://image.tmdb.org/t/p/w200${movie.poster_path}`;
-      }
-      if (movie.Poster && movie.Poster !== "N/A") {
-        return movie.Poster;
-      }
-      return "/placeholder-movie.jpg";
-    };
+    if (!movie) return null;
 
-    // Determine title
-    const getTitle = () => {
-      return movie.title || movie.Title || "Unknown Title";
-    };
-
-    // Determine year
-    const getYear = () => {
-      if (movie.release_date) {
-        return new Date(movie.release_date).getFullYear();
-      }
-      if (movie.Year) {
-        return movie.Year;
-      }
-      return "N/A";
-    };
-
-    // Determine rating
-    const getRating = () => {
-      if (movie.vote_average) {
-        return movie.vote_average.toFixed(1);
-      }
-      return "N/A";
+    // Safely extract movie data
+    const movieData = {
+      id: movie.imdbID || movie.id || `movie-${Math.random()}`,
+      title: movie.Title || movie.title || "Unknown Title",
+      year: movie.Year || movie.Year || "N/A",
+      poster:
+        movie.Poster && movie.Poster !== "N/A"
+          ? movie.Poster
+          : "/placeholder-movie.jpg",
+      rating: movie.imdbRating || movie.vote_average || "N/A",
+      type: movie.Type || "movie",
     };
 
     return (
-      <Card className="h-100 shadow-sm">
+      <Card className="h-100 shadow-sm movie-card">
         <Card.Img
           variant="top"
-          src={getImageSrc()}
-          style={{ height: "200px", objectFit: "cover" }}
+          src={movieData.poster}
+          alt={movieData.title}
+          style={{ height: "250px", objectFit: "cover" }}
           onError={(e) => {
             e.target.src = "/placeholder-movie.jpg";
           }}
         />
         <Card.Body className="d-flex flex-column">
-          <Card.Title className="h6 flex-grow-1" style={{ fontSize: "0.9rem" }}>
-            {getTitle()}
+          <Card.Title
+            className="h6 flex-grow-1"
+            style={{ fontSize: "0.9rem", minHeight: "40px" }}
+          >
+            {movieData.title}
           </Card.Title>
           <div className="d-flex justify-content-between align-items-center mt-auto">
-            <small className="text-muted">{getYear()}</small>
-            <small className="text-warning">⭐ {getRating()}</small>
+            <Badge bg="secondary">{movieData.year}</Badge>
+            <div className="text-warning small">
+              ⭐{" "}
+              {typeof movieData.rating === "number"
+                ? movieData.rating.toFixed(1)
+                : movieData.rating}
+            </div>
           </div>
         </Card.Body>
       </Card>
     );
   };
 
+  // Restaurant Card Component
   const RestaurantCard = ({ restaurant }) => {
+    if (!restaurant) return null;
+
     // Handle different restaurant data structures
     const restaurantData = {
-      id: restaurant.id,
+      id: restaurant.id || `restaurant-${Math.random()}`,
       name: restaurant.name || "Unknown Restaurant",
-      cuisine: restaurant.cuisine || restaurant.type || "Various",
+      cuisine: restaurant.cuisine || restaurant.type || "Various Cuisine",
       priceRange: restaurant.priceRange || restaurant.price_range || "$$",
       location:
         restaurant.location || restaurant.address || "Location not specified",
@@ -180,18 +196,26 @@ const Home = () => {
     };
 
     return (
-      <Card className="h-100 shadow-sm">
+      <Card className="h-100 shadow-sm restaurant-card">
         <Card.Body className="d-flex flex-column">
-          <Card.Title className="h6">{restaurantData.name}</Card.Title>
+          <Card.Title className="h6" style={{ minHeight: "40px" }}>
+            {restaurantData.name}
+          </Card.Title>
+
+          <div className="mb-2">
+            <Badge bg="success" className="me-1">
+              {restaurantData.cuisine}
+            </Badge>
+            <Badge bg="outline-secondary">{restaurantData.priceRange}</Badge>
+          </div>
+
           <Card.Text className="small text-muted mb-2 flex-grow-1">
-            {restaurantData.cuisine} • {restaurantData.priceRange}
-          </Card.Text>
-          <Card.Text className="small text-muted mb-2">
             📍 {restaurantData.location}
           </Card.Text>
+
           <div className="text-warning mt-auto">
             {"⭐".repeat(Math.floor(restaurantData.rating))}
-            {restaurantData.rating % 1 !== 0 && "☆"}
+            {"☆".repeat(5 - Math.floor(restaurantData.rating))}
             <span className="text-muted ms-1">({restaurantData.rating})</span>
           </div>
         </Card.Body>
@@ -204,7 +228,7 @@ const Home = () => {
       <Container className="my-5">
         <Row className="justify-content-center">
           <Col className="text-center">
-            <Spinner animation="border" role="status">
+            <Spinner animation="border" variant="primary" role="status">
               <span className="visually-hidden">Loading...</span>
             </Spinner>
             <p className="mt-2">Loading KoboWave...</p>
@@ -227,8 +251,7 @@ const Home = () => {
               </h1>
               <p className="lead mb-4">
                 Your ultimate destination for movie and restaurant reviews. Join
-                our community of {stats.activeUsers}+ users and discover new
-                experiences.
+                our community and discover new experiences.
               </p>
               <div className="hero-buttons">
                 <LinkContainer to="/movies">
@@ -249,7 +272,7 @@ const Home = () => {
               </div>
               {!currentUser && (
                 <div className="mt-3">
-                  <LinkContainer to="/login">
+                  <LinkContainer to="/signup">
                     <Button variant="outline-light" size="sm">
                       👤 Join Our Community
                     </Button>
@@ -259,30 +282,32 @@ const Home = () => {
             </Col>
             <Col lg={6}>
               <div className="text-center">
-                <div className="bg-light rounded p-4 text-dark">
-                  <h4>📊 Live Community Stats</h4>
-                  <Row className="mt-3">
+                <div className="bg-light rounded p-4 text-dark shadow">
+                  <h4 className="mb-4">📊 Community Stats</h4>
+                  <Row>
                     <Col xs={6} className="mb-3">
-                      <h5 className="text-primary mb-1">
+                      <h3 className="text-primary fw-bold mb-1">
                         {stats.moviesReviewed}
-                      </h5>
-                      <small>Movie Reviews</small>
+                      </h3>
+                      <small className="text-muted">Movie Reviews</small>
                     </Col>
                     <Col xs={6} className="mb-3">
-                      <h5 className="text-success mb-1">
+                      <h3 className="text-success fw-bold mb-1">
                         {stats.restaurantsListed}
-                      </h5>
-                      <small>Restaurants</small>
+                      </h3>
+                      <small className="text-muted">Restaurants</small>
                     </Col>
                     <Col xs={6} className="mb-3">
-                      <h5 className="text-info mb-1">
+                      <h3 className="text-info fw-bold mb-1">
                         {stats.communityReviews}
-                      </h5>
-                      <small>Total Reviews</small>
+                      </h3>
+                      <small className="text-muted">Total Reviews</small>
                     </Col>
                     <Col xs={6} className="mb-3">
-                      <h5 className="text-warning mb-1">{stats.activeUsers}</h5>
-                      <small>Active Users</small>
+                      <h3 className="text-warning fw-bold mb-1">
+                        {stats.activeUsers}
+                      </h3>
+                      <small className="text-muted">Active Users</small>
                     </Col>
                   </Row>
                 </div>
@@ -299,6 +324,15 @@ const Home = () => {
           </Alert>
         </Container>
       )}
+
+      {/* Debug Info - Remove in production */}
+      <Container className="mt-3">
+        <Alert variant="info" className="small">
+          <strong>🔧 Debug Info:</strong> Movies: {popularMovies.length} |
+          Restaurants: {featuredRestaurants.length} | Reviews:{" "}
+          {recentReviews.length}
+        </Alert>
+      </Container>
 
       {/* Features Section */}
       <section className="features-section py-5 bg-light">
@@ -361,7 +395,7 @@ const Home = () => {
                 <Col
                   lg={4}
                   md={6}
-                  key={review.id || `review-${index}-${Date.now()}`}
+                  key={review.id || `review-${index}`}
                   className="mb-4"
                 >
                   <ReviewCard review={review} />
@@ -370,7 +404,22 @@ const Home = () => {
             </Row>
           ) : (
             <Alert variant="info" className="text-center">
-              No reviews yet. Be the first to share your thoughts!
+              <div>
+                <p>No reviews yet. Be the first to share your thoughts!</p>
+                {currentUser ? (
+                  <LinkContainer to="/reviews">
+                    <Button variant="primary" size="sm">
+                      Write a Review
+                    </Button>
+                  </LinkContainer>
+                ) : (
+                  <LinkContainer to="/signup">
+                    <Button variant="primary" size="sm">
+                      Join to Review
+                    </Button>
+                  </LinkContainer>
+                )}
+              </div>
             </Alert>
           )}
         </Container>
@@ -394,8 +443,14 @@ const Home = () => {
           </Row>
           {popularMovies.length > 0 ? (
             <Row>
-              {popularMovies.map((movie) => (
-                <Col lg={2} md={4} sm={6} key={movie.uniqueId} className="mb-4">
+              {popularMovies.map((movie, index) => (
+                <Col
+                  lg={2}
+                  md={4}
+                  sm={6}
+                  key={movie.imdbID || `movie-${index}`}
+                  className="mb-4"
+                >
                   <MovieCard movie={movie} />
                 </Col>
               ))}
@@ -437,7 +492,7 @@ const Home = () => {
                 <Col
                   lg={4}
                   md={6}
-                  key={restaurant.id || `restaurant-${index}-${Date.now()}`}
+                  key={restaurant.id || `restaurant-${index}`}
                   className="mb-4"
                 >
                   <RestaurantCard restaurant={restaurant} />
@@ -459,27 +514,43 @@ const Home = () => {
         </Container>
       </section>
 
-      {/* Stats Section */}
-      <section className="py-5 bg-dark text-light">
+      {/* CTA Section */}
+      <section className="py-5 bg-dark text-light text-center">
         <Container>
-          <Row className="text-center">
-            <Col md={3} className="mb-3">
-              <h3 className="text-primary fw-bold">{stats.moviesReviewed}+</h3>
-              <p className="text-light">Movies Reviewed</p>
-            </Col>
-            <Col md={3} className="mb-3">
-              <h3 className="text-success fw-bold">
-                {stats.restaurantsListed}+
-              </h3>
-              <p className="text-light">Restaurants Listed</p>
-            </Col>
-            <Col md={3} className="mb-3">
-              <h3 className="text-info fw-bold">{stats.communityReviews}+</h3>
-              <p className="text-light">Community Reviews</p>
-            </Col>
-            <Col md={3} className="mb-3">
-              <h3 className="text-warning fw-bold">{stats.activeUsers}+</h3>
-              <p className="text-light">Active Community Members</p>
+          <Row className="justify-content-center">
+            <Col lg={8}>
+              <h2 className="fw-bold mb-3">Ready to Join Our Community?</h2>
+              <p className="lead mb-4">
+                Share your experiences, discover new favorites, and connect with
+                other reviewers.
+              </p>
+              {currentUser ? (
+                <div>
+                  <LinkContainer to="/movies">
+                    <Button variant="warning" size="lg" className="me-3">
+                      🎬 Review Movies
+                    </Button>
+                  </LinkContainer>
+                  <LinkContainer to="/restaurants">
+                    <Button variant="info" size="lg">
+                      🍽️ Review Restaurants
+                    </Button>
+                  </LinkContainer>
+                </div>
+              ) : (
+                <div>
+                  <LinkContainer to="/signup">
+                    <Button variant="warning" size="lg" className="me-3">
+                      Sign Up Free
+                    </Button>
+                  </LinkContainer>
+                  <LinkContainer to="/login">
+                    <Button variant="outline-light" size="lg">
+                      Login
+                    </Button>
+                  </LinkContainer>
+                </div>
+              )}
             </Col>
           </Row>
         </Container>

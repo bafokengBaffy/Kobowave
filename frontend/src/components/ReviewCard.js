@@ -1,133 +1,95 @@
-const ReviewCard = ({ review }) => {
-  // Ultimate safety check
-  if (!review || typeof review !== "object") {
+// src/components/ReviewCard.js
+import { Badge, Button, Card } from "react-bootstrap";
+import { useAuth } from "../contexts/AuthContext";
+import { reviewAPI } from "../services/api";
+
+const ReviewCard = ({ review, showActions = false, onDelete }) => {
+  const { currentUser } = useAuth();
+
+  if (!review) {
     return (
-      <div
-        style={{
-          border: "1px solid #ddd",
-          padding: "16px",
-          margin: "16px 0",
-          borderRadius: "8px",
-        }}
-      >
-        <div>Loading review...</div>
-      </div>
+      <Card className="mb-3">
+        <Card.Body>
+          <Card.Text className="text-muted">Review not available</Card.Text>
+        </Card.Body>
+      </Card>
     );
   }
 
-  // Use the actual property names from your API response
-  const title = review?.itemTitle ?? review?.title ?? "No Title";
-  const content = review?.content ?? "No content available";
-  const rating = review?.rating ?? 0;
-  const author = review?.author ?? review?.userName ?? "Anonymous";
-  const type = review?.type ?? "review";
+  const handleDelete = async () => {
+    if (!review.id) {
+      console.error("Cannot delete review: No review ID");
+      return;
+    }
 
-  // Your API might not have comments and tags, so use empty arrays
-  const comments = Array.isArray(review?.comments) ? review.comments : [];
-  const tags = Array.isArray(review?.tags) ? review.tags : [];
+    if (window.confirm("Are you sure you want to delete this review?")) {
+      try {
+        await reviewAPI.delete(review.id);
+        if (onDelete) {
+          onDelete(review.id);
+        }
+      } catch (error) {
+        console.error("Failed to delete review:", error);
+        alert("Failed to delete review. Please try again.");
+      }
+    }
+  };
 
-  const commentsLength = comments?.length ?? 0;
-  const tagsLength = tags?.length ?? 0;
+  const canDelete =
+    currentUser &&
+    (currentUser.uid === review.authorId ||
+      currentUser.email === review.author);
 
   return (
-    <div
-      style={{
-        border: "1px solid #ddd",
-        padding: "16px",
-        margin: "16px 0",
-        borderRadius: "8px",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: "12px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ fontSize: "1.2em" }}>
-            {type === "movie" ? "🎬" : "🍽️"}
-          </span>
-          <h3 style={{ margin: 0, fontSize: "1.1em" }}>{title}</h3>
-        </div>
-        <div style={{ color: "#ffa500", fontWeight: "bold" }}>
-          {"★".repeat(Math.floor(rating))}
-          {"☆".repeat(5 - Math.floor(rating))} ({rating}/5)
-        </div>
-      </div>
-
-      <p style={{ color: "#666", lineHeight: "1.5", marginBottom: "12px" }}>
-        {content.length > 150 ? `${content.substring(0, 150)}...` : content}
-      </p>
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: "0.9em",
-          color: "#888",
-          marginBottom: "12px",
-        }}
-      >
-        <span>By: {author}</span>
-        <span style={{ textTransform: "capitalize" }}>{type}</span>
-      </div>
-
-      {/* Only show if you have tags in your data */}
-      {tagsLength > 0 && (
-        <div style={{ marginBottom: "12px" }}>
-          {tags.map((tag, index) => (
-            <span
-              key={index}
-              style={{
-                display: "inline-block",
-                backgroundColor: "#e0e0e0",
-                padding: "4px 8px",
-                borderRadius: "4px",
-                marginRight: "8px",
-                fontSize: "0.8em",
-                color: "#555",
-              }}
-            >
-              #{tag}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Only show if you have comments in your data */}
-      {commentsLength > 0 && (
-        <div style={{ borderTop: "1px solid #eee", paddingTop: "12px" }}>
-          <h4 style={{ margin: "0 0 8px 0", fontSize: "1em", color: "#555" }}>
-            Comments ({commentsLength})
-          </h4>
-          {comments.map((comment, index) => {
-            const safeComment = comment || {};
-            const commentAuthor =
-              safeComment?.userName ?? safeComment?.author ?? "Anonymous";
-            const commentText =
-              safeComment?.text ?? safeComment?.content ?? "No comment text";
-
-            return (
-              <div
-                key={index}
-                style={{
-                  padding: "8px",
-                  backgroundColor: "#f9f9f9",
-                  borderRadius: "4px",
-                  marginBottom: "8px",
-                  fontSize: "0.9em",
-                }}
+    <Card className="mb-3 shadow-sm review-card">
+      <Card.Body>
+        <div className="d-flex justify-content-between align-items-start mb-2">
+          <div className="flex-grow-1">
+            <div className="d-flex align-items-center mb-1">
+              <Badge
+                bg={review.type === "movie" ? "primary" : "success"}
+                className="me-2"
               >
-                <strong>{commentAuthor}:</strong> {commentText}
-              </div>
-            );
-          })}
+                {review.type === "movie" ? "🎥 Movie" : "🍽️ Restaurant"}
+              </Badge>
+              <strong className="text-dark">{review.author}</strong>
+            </div>
+            <h6 className="text-muted mb-0">{review.itemTitle}</h6>
+          </div>
+          <div className="d-flex align-items-center">
+            <Badge bg="warning" text="dark" className="fs-6">
+              ⭐ {review.rating}/5
+            </Badge>
+          </div>
         </div>
-      )}
-    </div>
+
+        <Card.Text className="mt-3 mb-3" style={{ lineHeight: "1.5" }}>
+          {review.content}
+        </Card.Text>
+
+        <div className="d-flex justify-content-between align-items-center">
+          <small className="text-muted">
+            Reviewed on{" "}
+            {new Date(review.createdAt).toLocaleDateString("en-US", {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })}
+            {review.updatedAt && review.updatedAt !== review.createdAt && (
+              <span className="ms-1">
+                • Updated {new Date(review.updatedAt).toLocaleDateString()}
+              </span>
+            )}
+          </small>
+
+          {showActions && canDelete && (
+            <Button variant="outline-danger" size="sm" onClick={handleDelete}>
+              Delete
+            </Button>
+          )}
+        </div>
+      </Card.Body>
+    </Card>
   );
 };
 

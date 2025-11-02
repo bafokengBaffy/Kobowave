@@ -1,5 +1,5 @@
 // src/pages/MovieSearch.js
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Badge,
@@ -24,6 +24,7 @@ const MovieSearch = () => {
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedMovie, setSelectedMovie] = useState(null);
+  const [movieDetails, setMovieDetails] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
   const [newReview, setNewReview] = useState({
@@ -31,6 +32,9 @@ const MovieSearch = () => {
     rating: 5,
   });
   const { currentUser } = useAuth();
+
+  // Add ref to track if data has been loaded
+  const hasLoadedRef = useRef(false);
 
   const handleSearch = async (query) => {
     if (!query.trim()) {
@@ -42,7 +46,9 @@ const MovieSearch = () => {
     setError("");
 
     try {
+      console.log("🔍 Searching for movies:", query);
       const moviesData = await movieAPI.search(query);
+      console.log("🎬 Search results:", moviesData);
       setMovies(Array.isArray(moviesData) ? moviesData : []);
 
       if (moviesData.length === 0) {
@@ -60,12 +66,25 @@ const MovieSearch = () => {
     setSelectedMovie(movie);
     setShowModal(true);
     setActiveTab("details");
+    setMovieDetails(null);
 
-    // Load reviews for this movie
+    // Load detailed movie information
     if (movie.imdbID) {
+      try {
+        console.log("📖 Loading details for movie:", movie.imdbID);
+        const details = await movieAPI.getDetails(movie.imdbID);
+        console.log("🎬 Movie details loaded:", details);
+        setMovieDetails(details);
+      } catch (err) {
+        console.error("Error loading movie details:", err);
+        setMovieDetails(movie); // Fallback to basic movie data
+      }
+
+      // Load reviews for this movie
       setReviewsLoading(true);
       try {
         const reviewsData = await reviewAPI.getByItem(movie.imdbID, "movie");
+        console.log("📝 Movie reviews loaded:", reviewsData);
         setReviews(Array.isArray(reviewsData) ? reviewsData : []);
       } catch (err) {
         console.error("Error loading reviews:", err);
@@ -99,6 +118,7 @@ const MovieSearch = () => {
         authorId: currentUser.uid,
       };
 
+      console.log("📝 Submitting review:", reviewData);
       await reviewAPI.create(reviewData);
 
       // Refresh reviews
@@ -111,6 +131,10 @@ const MovieSearch = () => {
       setNewReview({ content: "", rating: 5 });
       setError("");
       setActiveTab("reviews");
+
+      // Show success message
+      setError("✅ Review submitted successfully!");
+      setTimeout(() => setError(""), 3000);
     } catch (err) {
       setError("Failed to submit review. Please try again.");
     }
@@ -120,14 +144,16 @@ const MovieSearch = () => {
     setLoading(true);
     setError("");
     try {
+      console.log("🎬 Loading popular movies...");
       const moviesData = await movieAPI.getPopular();
+      console.log("🎬 Popular movies loaded:", moviesData);
       setMovies(Array.isArray(moviesData) ? moviesData : []);
 
       if (moviesData.length === 0) {
         setError("No popular movies found.");
       }
     } catch (err) {
-      setError("Failed to load popular movies. Make sure backend is running.");
+      setError("Failed to load popular movies. Please try again.");
       console.error("Popular movies error:", err);
     } finally {
       setLoading(false);
@@ -135,50 +161,73 @@ const MovieSearch = () => {
   };
 
   useEffect(() => {
-    loadPopularMovies();
+    // Prevent duplicate calls in development
+    if (!hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      loadPopularMovies();
+    }
   }, []);
 
   // Movie Card Component
-  const MovieCard = ({ movie, onViewDetails }) => (
-    <Card className="h-100 shadow-sm">
-      <Card.Img
-        variant="top"
-        src={movie.Poster !== "N/A" ? movie.Poster : "/placeholder-movie.jpg"}
-        alt={movie.Title}
-        style={{ height: "300px", objectFit: "cover" }}
-        onError={(e) => {
-          e.target.src = "/placeholder-movie.jpg";
-        }}
-      />
-      <Card.Body className="d-flex flex-column">
-        <Card.Title className="flex-grow-1" style={{ fontSize: "1rem" }}>
-          {movie.Title}
-        </Card.Title>
-        <Card.Text className="text-muted" style={{ fontSize: "0.9rem" }}>
-          {movie.Year} • {movie.Type}
-        </Card.Text>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => onViewDetails(movie)}
-        >
-          View Details
-        </Button>
-      </Card.Body>
-    </Card>
-  );
+  const MovieCard = ({ movie, onViewDetails }) => {
+    if (!movie) return null;
+
+    const movieData = {
+      id: movie.imdbID || movie.id || `movie-${Math.random()}`,
+      title: movie.Title || movie.title || "Unknown Title",
+      year: movie.Year || movie.year || "N/A",
+      poster:
+        movie.Poster && movie.Poster !== "N/A"
+          ? movie.Poster
+          : "/placeholder-movie.jpg",
+      type: movie.Type || "movie",
+    };
+
+    return (
+      <Card className="h-100 shadow-sm movie-card hover-shadow">
+        <Card.Img
+          variant="top"
+          src={movieData.poster}
+          alt={movieData.title}
+          style={{ height: "300px", objectFit: "cover" }}
+          onError={(e) => {
+            e.target.src = "/placeholder-movie.jpg";
+          }}
+        />
+        <Card.Body className="d-flex flex-column">
+          <Card.Title
+            className="flex-grow-1"
+            style={{ fontSize: "1rem", minHeight: "50px" }}
+          >
+            {movieData.title}
+          </Card.Title>
+          <Card.Text className="text-muted" style={{ fontSize: "0.9rem" }}>
+            {movieData.year} • {movieData.type}
+          </Card.Text>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => onViewDetails(movie)}
+            className="mt-auto"
+          >
+            View Details
+          </Button>
+        </Card.Body>
+      </Card>
+    );
+  };
 
   // Review Card Component
   const ReviewCard = ({ review }) => (
     <Card className="mb-3">
       <Card.Body>
         <div className="d-flex justify-content-between align-items-start mb-2">
-          <strong>{review.author}</strong>
+          <strong className="text-primary">{review.author}</strong>
           <Badge bg="warning" text="dark">
             ⭐ {review.rating}/5
           </Badge>
         </div>
-        <Card.Text>{review.content}</Card.Text>
+        <Card.Text className="mb-2">{review.content}</Card.Text>
         <small className="text-muted">
           {new Date(review.createdAt).toLocaleDateString()}
         </small>
@@ -197,7 +246,7 @@ const MovieSearch = () => {
 
     return (
       <Form onSubmit={handleSubmit} className="mb-4">
-        <Row className="g-2">
+        <Row className="g-2 align-items-center">
           <Col>
             <Form.Control
               type="text"
@@ -205,6 +254,7 @@ const MovieSearch = () => {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               disabled={loading}
+              size="lg"
             />
           </Col>
           <Col xs="auto">
@@ -212,6 +262,7 @@ const MovieSearch = () => {
               type="submit"
               variant="primary"
               disabled={loading || !query.trim()}
+              size="lg"
             >
               {loading ? (
                 <>
@@ -226,7 +277,7 @@ const MovieSearch = () => {
                   Searching...
                 </>
               ) : (
-                "Search"
+                "🔍 Search"
               )}
             </Button>
           </Col>
@@ -236,73 +287,93 @@ const MovieSearch = () => {
   };
 
   // Movie Details Component
-  const MovieDetails = ({ movie }) => (
-    <Row>
-      <Col md={4}>
-        <img
-          src={movie.Poster !== "N/A" ? movie.Poster : "/placeholder-movie.jpg"}
-          alt={movie.Title}
-          className="img-fluid rounded shadow"
-          onError={(e) => {
-            e.target.src = "/placeholder-movie.jpg";
-          }}
-        />
-      </Col>
-      <Col md={8}>
-        <div className="mb-3">
-          <Badge bg="primary" className="me-2">
-            {movie.Year}
-          </Badge>
-          <Badge bg="success" className="me-2">
-            ⭐ {movie.imdbRating || "N/A"}
-          </Badge>
-          <Badge bg="secondary">{movie.Type}</Badge>
-        </div>
+  const MovieDetails = ({ movie, details }) => {
+    const displayDetails = details || movie;
 
-        <h5>Overview</h5>
-        <p className="mb-4">{movie.Plot || "No overview available."}</p>
+    if (!displayDetails)
+      return <Alert variant="warning">No movie details available.</Alert>;
 
-        {movie.Genre && (
+    return (
+      <Row>
+        <Col md={4}>
+          <img
+            src={
+              displayDetails.Poster && displayDetails.Poster !== "N/A"
+                ? displayDetails.Poster
+                : "/placeholder-movie.jpg"
+            }
+            alt={displayDetails.Title}
+            className="img-fluid rounded shadow"
+            style={{ maxHeight: "400px", objectFit: "cover" }}
+            onError={(e) => {
+              e.target.src = "/placeholder-movie.jpg";
+            }}
+          />
+        </Col>
+        <Col md={8}>
           <div className="mb-3">
-            <strong>Genres:</strong> {movie.Genre}
+            <Badge bg="primary" className="me-2">
+              {displayDetails.Year}
+            </Badge>
+            <Badge bg="success" className="me-2">
+              ⭐{" "}
+              {displayDetails.imdbRating || displayDetails.imdbRating || "N/A"}
+            </Badge>
+            <Badge bg="info" className="me-2">
+              {displayDetails.Rated || "Not Rated"}
+            </Badge>
+            <Badge bg="secondary">{displayDetails.Type || "Movie"}</Badge>
           </div>
-        )}
 
-        {movie.Runtime && (
-          <div className="mb-3">
-            <strong>Runtime:</strong> {movie.Runtime}
-          </div>
-        )}
+          <h5>Overview</h5>
+          <p className="mb-4 text-muted">
+            {displayDetails.Plot || "No overview available."}
+          </p>
 
-        {movie.Director && movie.Director !== "N/A" && (
-          <div className="mb-3">
-            <strong>Director:</strong> {movie.Director}
-          </div>
-        )}
+          {displayDetails.Genre && displayDetails.Genre !== "N/A" && (
+            <div className="mb-3">
+              <strong>Genres:</strong> {displayDetails.Genre}
+            </div>
+          )}
 
-        {movie.Actors && movie.Actors !== "N/A" && (
-          <div className="mb-3">
-            <strong>Cast:</strong> {movie.Actors}
-          </div>
-        )}
+          {displayDetails.Runtime && displayDetails.Runtime !== "N/A" && (
+            <div className="mb-3">
+              <strong>Runtime:</strong> {displayDetails.Runtime}
+            </div>
+          )}
 
-        {movie.imdbID && (
-          <div className="mb-3">
-            <strong>IMDb ID:</strong> {movie.imdbID}
-          </div>
-        )}
-      </Col>
-    </Row>
-  );
+          {displayDetails.Director && displayDetails.Director !== "N/A" && (
+            <div className="mb-3">
+              <strong>Director:</strong> {displayDetails.Director}
+            </div>
+          )}
+
+          {displayDetails.Actors && displayDetails.Actors !== "N/A" && (
+            <div className="mb-3">
+              <strong>Cast:</strong> {displayDetails.Actors}
+            </div>
+          )}
+
+          {displayDetails.imdbID && (
+            <div className="mb-3">
+              <strong>IMDb ID:</strong> <code>{displayDetails.imdbID}</code>
+            </div>
+          )}
+        </Col>
+      </Row>
+    );
+  };
 
   return (
     <Container className="my-4">
       <Row>
         <Col>
-          <h1 className="text-center mb-4">🎬 Movie Search</h1>
-          <p className="text-center text-muted mb-4">
-            Discover movies and share your reviews with our community
-          </p>
+          <div className="text-center mb-5">
+            <h1 className="display-5 fw-bold text-primary">🎬 Movie Search</h1>
+            <p className="lead text-muted">
+              Discover movies and share your reviews with our community
+            </p>
+          </div>
 
           <SearchBar
             onSearch={handleSearch}
@@ -311,15 +382,25 @@ const MovieSearch = () => {
           />
 
           {error && (
-            <Alert variant="danger" className="text-center">
+            <Alert
+              variant={error.includes("✅") ? "success" : "danger"}
+              className="text-center"
+            >
               {error}
+            </Alert>
+          )}
+
+          {/* Debug Info */}
+          {movies.length > 0 && (
+            <Alert variant="info" className="small">
+              <strong>🔧 Found {movies.length} movies</strong>
             </Alert>
           )}
 
           {/* Movies Grid */}
           <div className="mb-4">
             <div className="d-flex justify-content-between align-items-center mb-3">
-              <h4>Featured Movies</h4>
+              <h4 className="text-primary">Featured Movies</h4>
               <Button
                 variant="outline-primary"
                 size="sm"
@@ -336,17 +417,15 @@ const MovieSearch = () => {
                     className="me-2"
                   />
                 ) : (
-                  "Refresh"
+                  "🔄 Refresh"
                 )}
               </Button>
             </div>
 
             {loading ? (
-              <div className="text-center py-4">
-                <Spinner animation="border" role="status">
-                  <span className="visually-hidden">Loading...</span>
-                </Spinner>
-                <p className="mt-2">Loading movies...</p>
+              <div className="text-center py-5">
+                <Spinner animation="border" variant="primary" size="lg" />
+                <p className="mt-3 text-muted">Loading movies...</p>
               </div>
             ) : (
               <Row>
@@ -368,9 +447,15 @@ const MovieSearch = () => {
             )}
 
             {!loading && movies.length === 0 && (
-              <Alert variant="info" className="text-center">
-                No movies found. Try searching for a movie title or click
-                Refresh to load popular movies.
+              <Alert variant="info" className="text-center py-4">
+                <h5>No movies found</h5>
+                <p className="mb-3">
+                  Try searching for a movie title or click Refresh to load
+                  popular movies.
+                </p>
+                <Button variant="primary" onClick={loadPopularMovies}>
+                  Load Popular Movies
+                </Button>
               </Alert>
             )}
           </div>
@@ -378,11 +463,16 @@ const MovieSearch = () => {
       </Row>
 
       {/* Movie Details Modal */}
-      <Modal show={showModal} onHide={() => setShowModal(false)} size="lg">
-        <Modal.Header closeButton>
-          <Modal.Title>{selectedMovie?.Title}</Modal.Title>
+      <Modal
+        show={showModal}
+        onHide={() => setShowModal(false)}
+        size="lg"
+        centered
+      >
+        <Modal.Header closeButton className="bg-light">
+          <Modal.Title className="fw-bold">{selectedMovie?.Title}</Modal.Title>
         </Modal.Header>
-        <Modal.Body>
+        <Modal.Body style={{ maxHeight: "70vh", overflowY: "auto" }}>
           {selectedMovie && (
             <Tabs
               activeKey={activeTab}
@@ -390,27 +480,28 @@ const MovieSearch = () => {
               className="mb-3"
             >
               <Tab eventKey="details" title="🎬 Details">
-                <MovieDetails movie={selectedMovie} />
+                <MovieDetails movie={selectedMovie} details={movieDetails} />
               </Tab>
 
               <Tab eventKey="reviews" title={`📝 Reviews (${reviews.length})`}>
                 {reviewsLoading ? (
                   <div className="text-center py-4">
-                    <Spinner animation="border" />
-                    <p className="mt-2">Loading reviews...</p>
+                    <Spinner animation="border" variant="primary" />
+                    <p className="mt-2 text-muted">Loading reviews...</p>
                   </div>
                 ) : (
                   <>
                     {reviews.length > 0 ? (
-                      reviews.map((review) => (
+                      reviews.map((review, index) => (
                         <ReviewCard
-                          key={review.id || review._id}
+                          key={review.id || `review-${index}`}
                           review={review}
                         />
                       ))
                     ) : (
                       <Alert variant="info" className="text-center">
-                        No reviews yet. Be the first to review this movie!
+                        <h6>No reviews yet</h6>
+                        <p>Be the first to review this movie!</p>
                       </Alert>
                     )}
                   </>
@@ -421,8 +512,8 @@ const MovieSearch = () => {
                 {currentUser ? (
                   <Form onSubmit={handleSubmitReview}>
                     <Form.Group className="mb-3">
-                      <Form.Label>Your Rating</Form.Label>
-                      <div>
+                      <Form.Label className="fw-bold">Your Rating</Form.Label>
+                      <div className="d-flex align-items-center">
                         {[1, 2, 3, 4, 5].map((star) => (
                           <span
                             key={star}
@@ -433,17 +524,26 @@ const MovieSearch = () => {
                               cursor: "pointer",
                               fontSize: "2rem",
                               marginRight: "5px",
+                              transition: "transform 0.2s",
                             }}
+                            onMouseEnter={(e) =>
+                              (e.target.style.transform = "scale(1.2)")
+                            }
+                            onMouseLeave={(e) =>
+                              (e.target.style.transform = "scale(1)")
+                            }
                           >
                             {star <= newReview.rating ? "⭐" : "☆"}
                           </span>
                         ))}
-                        <span className="ms-2">({newReview.rating}/5)</span>
+                        <span className="ms-2 fw-bold">
+                          ({newReview.rating}/5)
+                        </span>
                       </div>
                     </Form.Group>
 
                     <Form.Group className="mb-3">
-                      <Form.Label>Your Review</Form.Label>
+                      <Form.Label className="fw-bold">Your Review</Form.Label>
                       <Form.Control
                         as="textarea"
                         rows={4}
@@ -454,22 +554,26 @@ const MovieSearch = () => {
                             content: e.target.value,
                           })
                         }
-                        placeholder="Share your thoughts about this movie..."
+                        placeholder="Share your thoughts about this movie... What did you like? What could be better?"
                         required
                       />
                     </Form.Group>
 
-                    <Button variant="primary" type="submit">
-                      Submit Review
-                    </Button>
+                    <div className="d-grid">
+                      <Button variant="primary" type="submit" size="lg">
+                        Submit Review
+                      </Button>
+                    </div>
                   </Form>
                 ) : (
                   <Alert variant="warning" className="text-center">
                     <h5>Login Required</h5>
                     <p>Please log in to write a review.</p>
-                    <Button variant="primary" href="/login">
-                      Go to Login
-                    </Button>
+                    <div className="d-grid gap-2">
+                      <Button variant="primary" href="/login">
+                        Go to Login
+                      </Button>
+                    </div>
                   </Alert>
                 )}
               </Tab>
