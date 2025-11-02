@@ -1,5 +1,4 @@
-import React from "react";
-import { Container, Row, Col, Card, Badge } from "react-bootstrap";
+import { Badge, Card, Col, Container, Row } from "react-bootstrap";
 
 const About = () => {
   const techStack = {
@@ -103,7 +102,6 @@ const About = () => {
               <Col md={6}>
                 <strong>Project Name:</strong> KoboWave
                 <br />
-                <strong>Author:</strong> Bafokeng Khoali (@BaffyKay)
                 <br />
                 <strong>Version:</strong> 1.0.0
                 <br />
