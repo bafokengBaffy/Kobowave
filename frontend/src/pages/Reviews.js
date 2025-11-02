@@ -1,18 +1,18 @@
 // src/pages/Reviews.js
-import React, { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
-  Container,
-  Row,
-  Col,
   Alert,
-  Spinner,
-  Button,
-  Form,
-  Card,
   Badge,
+  Button,
+  Card,
+  Col,
+  Container,
+  Form,
+  Row,
+  Spinner,
 } from "react-bootstrap";
-import { reviewAPI } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
+import { reviewAPI } from "../services/api";
 
 const Reviews = () => {
   const [reviews, setReviews] = useState([]);
@@ -27,7 +27,9 @@ const Reviews = () => {
     try {
       const params = filter !== "all" ? { type: filter } : {};
       const response = await reviewAPI.getAll(params);
-      setReviews(response.data.data || []);
+      // Handle different response structures
+      const reviewsData = response.data?.data || response.data || [];
+      setReviews(Array.isArray(reviewsData) ? reviewsData : []);
     } catch (err) {
       setError("Failed to load reviews. Make sure backend is running.");
       console.error("Reviews load error:", err);
@@ -90,7 +92,8 @@ const Reviews = () => {
 
         <small className="text-muted">
           Reviewed on {new Date(review.createdAt).toLocaleDateString()}
-          {review.updatedAt !== review.createdAt &&
+          {review.updatedAt &&
+            review.updatedAt !== review.createdAt &&
             ` • Updated on ${new Date(review.updatedAt).toLocaleDateString()}`}
         </small>
       </Card.Body>
@@ -171,7 +174,7 @@ const Reviews = () => {
               {filteredReviews.length > 0 ? (
                 filteredReviews.map((review) => (
                   <ReviewCard
-                    key={review.id}
+                    key={review.id || review._id}
                     review={review}
                     onDelete={handleDeleteReview}
                   />

@@ -65,33 +65,19 @@ const MyReviews = () => {
         return;
       }
 
-      const response = await reviewAPI.getAll({ authorId: currentUser.uid });
-      console.log("✅ Reviews API response:", response.data);
+      const reviewsData = await reviewAPI.getByUser(currentUser.uid);
+      console.log("✅ Reviews loaded:", reviewsData);
 
-      setUserReviews(response.data.data || []);
+      setUserReviews(Array.isArray(reviewsData) ? reviewsData : []);
 
-      if (response.data.data && response.data.data.length === 0) {
+      if (reviewsData.length === 0) {
         console.log(
           "ℹ️ No reviews found for user - this is normal for new users"
         );
       }
     } catch (err) {
       console.error("❌ Reviews load error:", err);
-
-      if (err.response) {
-        // Server responded with error status
-        setError(
-          `Server error: ${err.response.data.error || err.response.status}`
-        );
-      } else if (err.request) {
-        // Request was made but no response received
-        setError(
-          "Cannot connect to backend server. Please make sure it's running on port 5000."
-        );
-      } else {
-        // Other errors
-        setError("Failed to load your reviews. Please try again.");
-      }
+      setError("Failed to load your reviews. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -171,9 +157,7 @@ const MyReviews = () => {
       await loadUserReviews();
     } catch (err) {
       console.error("Create review error:", err);
-      setError(
-        "Failed to create review: " + (err.response?.data?.error || err.message)
-      );
+      setError("Failed to create review: " + (err.userMessage || err.message));
     } finally {
       setSubmitting(false);
     }
@@ -236,7 +220,7 @@ const MyReviews = () => {
         <div className="d-flex justify-content-between align-items-center">
           <small className="text-muted">
             Reviewed on {new Date(review.createdAt).toLocaleDateString()}
-            {review.updatedAt !== review.createdAt && (
+            {review.updatedAt && review.updatedAt !== review.createdAt && (
               <>
                 {" "}
                 • Updated on {new Date(review.updatedAt).toLocaleDateString()}
@@ -495,7 +479,7 @@ const MyReviews = () => {
 
                   {userReviews.map((review) => (
                     <ReviewCard
-                      key={review.id}
+                      key={review.id || review._id}
                       review={review}
                       onEdit={handleEditReview}
                       onDelete={handleDeleteReview}

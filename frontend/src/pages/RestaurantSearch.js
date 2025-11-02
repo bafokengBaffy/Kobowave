@@ -1,3 +1,4 @@
+// src/pages/RestaurantSearch.js
 import React, { useState, useEffect } from "react";
 import {
   Container,
@@ -7,10 +8,10 @@ import {
   Spinner,
   Modal,
   Button,
+  Card,
+  Badge,
 } from "react-bootstrap";
 import { restaurantAPI } from "../services/api";
-import SearchBar from "../components/SearchBar";
-import RestaurantCard from "../components/RestaurantCard";
 
 const RestaurantSearch = () => {
   const [restaurants, setRestaurants] = useState([]);
@@ -24,7 +25,9 @@ const RestaurantSearch = () => {
     setError("");
     try {
       const response = await restaurantAPI.getAll();
-      setRestaurants(response.data.data || response.data || []);
+      // Handle different response structures
+      const restaurantsData = response.data?.data || response.data || [];
+      setRestaurants(Array.isArray(restaurantsData) ? restaurantsData : []);
     } catch (err) {
       const errorMessage =
         err.response?.data?.error ||
@@ -55,7 +58,9 @@ const RestaurantSearch = () => {
 
     try {
       const response = await restaurantAPI.search(query);
-      setRestaurants(response.data.data || response.data || []);
+      // Handle different response structures
+      const restaurantsData = response.data?.data || response.data || [];
+      setRestaurants(Array.isArray(restaurantsData) ? restaurantsData : []);
     } catch (err) {
       const errorMessage =
         err.response?.data?.error ||
@@ -76,6 +81,91 @@ const RestaurantSearch = () => {
   useEffect(() => {
     loadRestaurants();
   }, []);
+
+  // Restaurant Card Component
+  const RestaurantCard = ({ restaurant, onViewDetails }) => (
+    <Card className="h-100 shadow-sm">
+      <Card.Body className="d-flex flex-column">
+        <div className="d-flex justify-content-between align-items-start mb-2">
+          <Card.Title className="flex-grow-1" style={{ fontSize: "1.1rem" }}>
+            {restaurant.name}
+          </Card.Title>
+          <Badge bg="success">⭐ {restaurant.rating || "N/A"}</Badge>
+        </div>
+
+        <Card.Text className="text-muted mb-2">
+          <strong>Cuisine:</strong> {restaurant.cuisine}
+        </Card.Text>
+
+        <Card.Text className="text-muted mb-2">
+          <strong>Location:</strong> 📍 {restaurant.location}
+        </Card.Text>
+
+        {restaurant.priceRange && (
+          <Card.Text className="text-muted mb-3">
+            <strong>Price:</strong> {restaurant.priceRange}
+          </Card.Text>
+        )}
+
+        <div className="mt-auto">
+          <Button
+            variant="success"
+            size="sm"
+            onClick={() => onViewDetails(restaurant)}
+            className="w-100"
+          >
+            View Details
+          </Button>
+        </div>
+      </Card.Body>
+    </Card>
+  );
+
+  // Search Bar Component
+  const SearchBar = ({ onSearch, placeholder, loading }) => {
+    const [query, setQuery] = useState("");
+
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      onSearch(query);
+    };
+
+    return (
+      <form onSubmit={handleSubmit} className="mb-4">
+        <div className="input-group">
+          <input
+            type="text"
+            className="form-control"
+            placeholder={placeholder}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            disabled={loading}
+          />
+          <button
+            type="submit"
+            className="btn btn-success"
+            disabled={loading || !query.trim()}
+          >
+            {loading ? (
+              <>
+                <Spinner
+                  as="span"
+                  animation="border"
+                  size="sm"
+                  role="status"
+                  aria-hidden="true"
+                  className="me-2"
+                />
+                Searching...
+              </>
+            ) : (
+              "Search"
+            )}
+          </button>
+        </div>
+      </form>
+    );
+  };
 
   return (
     <Container className="my-4">
@@ -127,8 +217,13 @@ const RestaurantSearch = () => {
               </div>
             ) : (
               <Row>
-                {restaurants.map((restaurant) => (
-                  <Col key={restaurant.id} lg={4} md={6} className="mb-4">
+                {restaurants.map((restaurant, index) => (
+                  <Col
+                    key={restaurant.id || `restaurant-${index}`}
+                    lg={4}
+                    md={6}
+                    className="mb-4"
+                  >
                     <RestaurantCard
                       restaurant={restaurant}
                       onViewDetails={handleViewDetails}

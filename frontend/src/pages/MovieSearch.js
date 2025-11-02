@@ -42,9 +42,10 @@ const MovieSearch = () => {
     setError("");
 
     try {
-      const response = await movieAPI.search(query);
-      setMovies(response.data.data?.results || []);
-      if (response.data.data?.results?.length === 0) {
+      const moviesData = await movieAPI.search(query);
+      setMovies(Array.isArray(moviesData) ? moviesData : []);
+
+      if (moviesData.length === 0) {
         setError("No movies found. Try a different search term.");
       }
     } catch (err) {
@@ -64,13 +65,11 @@ const MovieSearch = () => {
     if (movie.imdbID) {
       setReviewsLoading(true);
       try {
-        const response = await reviewAPI.getAll({
-          itemId: movie.imdbID,
-          type: "movie",
-        });
-        setReviews(response.data.data || []);
+        const reviewsData = await reviewAPI.getByItem(movie.imdbID, "movie");
+        setReviews(Array.isArray(reviewsData) ? reviewsData : []);
       } catch (err) {
         console.error("Error loading reviews:", err);
+        setReviews([]);
       } finally {
         setReviewsLoading(false);
       }
@@ -103,11 +102,11 @@ const MovieSearch = () => {
       await reviewAPI.create(reviewData);
 
       // Refresh reviews
-      const response = await reviewAPI.getAll({
-        itemId: selectedMovie.imdbID,
-        type: "movie",
-      });
-      setReviews(response.data.data || []);
+      const reviewsData = await reviewAPI.getByItem(
+        selectedMovie.imdbID,
+        "movie"
+      );
+      setReviews(Array.isArray(reviewsData) ? reviewsData : []);
 
       setNewReview({ content: "", rating: 5 });
       setError("");
@@ -121,9 +120,10 @@ const MovieSearch = () => {
     setLoading(true);
     setError("");
     try {
-      const response = await movieAPI.getPopular();
-      setMovies(response.data.data?.results || []);
-      if (response.data.data?.results?.length === 0) {
+      const moviesData = await movieAPI.getPopular();
+      setMovies(Array.isArray(moviesData) ? moviesData : []);
+
+      if (moviesData.length === 0) {
         setError("No popular movies found.");
       }
     } catch (err) {
@@ -274,7 +274,7 @@ const MovieSearch = () => {
           </div>
         )}
 
-        {movie.Director && movie.Directer !== "N/A" && (
+        {movie.Director && movie.Director !== "N/A" && (
           <div className="mb-3">
             <strong>Director:</strong> {movie.Director}
           </div>
@@ -350,8 +350,14 @@ const MovieSearch = () => {
               </div>
             ) : (
               <Row>
-                {movies.map((movie) => (
-                  <Col key={movie.imdbID} lg={3} md={4} sm={6} className="mb-4">
+                {movies.map((movie, index) => (
+                  <Col
+                    key={movie.imdbID || `movie-${index}`}
+                    lg={3}
+                    md={4}
+                    sm={6}
+                    className="mb-4"
+                  >
                     <MovieCard
                       movie={movie}
                       onViewDetails={handleViewDetails}
@@ -397,7 +403,10 @@ const MovieSearch = () => {
                   <>
                     {reviews.length > 0 ? (
                       reviews.map((review) => (
-                        <ReviewCard key={review.id} review={review} />
+                        <ReviewCard
+                          key={review.id || review._id}
+                          review={review}
+                        />
                       ))
                     ) : (
                       <Alert variant="info" className="text-center">
