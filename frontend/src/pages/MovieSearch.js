@@ -24,6 +24,7 @@ const MovieSearch = () => {
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedMovie, setSelectedMovie] = useState(null);
+  const [movieDetails, setMovieDetails] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
   const [newReview, setNewReview] = useState({
@@ -60,9 +61,18 @@ const MovieSearch = () => {
     setSelectedMovie(movie);
     setShowModal(true);
     setActiveTab("details");
+    setMovieDetails(null);
 
-    // Load reviews for this movie
+    // Load detailed movie information
     if (movie.imdbID) {
+      try {
+        const details = await movieAPI.getDetails(movie.imdbID);
+        setMovieDetails(details);
+      } catch (err) {
+        console.error("Error loading movie details:", err);
+      }
+
+      // Load reviews for this movie
       setReviewsLoading(true);
       try {
         const reviewsData = await reviewAPI.getByItem(movie.imdbID, "movie");
@@ -155,7 +165,7 @@ const MovieSearch = () => {
           {movie.Title}
         </Card.Title>
         <Card.Text className="text-muted" style={{ fontSize: "0.9rem" }}>
-          {movie.Year} • {movie.Type}
+          {movie.Year} • {movie.Type || "Movie"}
         </Card.Text>
         <Button
           variant="primary"
@@ -235,65 +245,96 @@ const MovieSearch = () => {
     );
   };
 
-  // Movie Details Component
-  const MovieDetails = ({ movie }) => (
-    <Row>
-      <Col md={4}>
-        <img
-          src={movie.Poster !== "N/A" ? movie.Poster : "/placeholder-movie.jpg"}
-          alt={movie.Title}
-          className="img-fluid rounded shadow"
-          onError={(e) => {
-            e.target.src = "/placeholder-movie.jpg";
-          }}
-        />
-      </Col>
-      <Col md={8}>
-        <div className="mb-3">
-          <Badge bg="primary" className="me-2">
-            {movie.Year}
-          </Badge>
-          <Badge bg="success" className="me-2">
-            ⭐ {movie.imdbRating || "N/A"}
-          </Badge>
-          <Badge bg="secondary">{movie.Type}</Badge>
-        </div>
+  // Movie Details Component (Using OMDb structure)
+  const MovieDetails = ({ movie, details }) => {
+    const displayDetails = details || movie;
 
-        <h5>Overview</h5>
-        <p className="mb-4">{movie.Plot || "No overview available."}</p>
-
-        {movie.Genre && (
+    return (
+      <Row>
+        <Col md={4}>
+          <img
+            src={
+              displayDetails.Poster !== "N/A"
+                ? displayDetails.Poster
+                : "/placeholder-movie.jpg"
+            }
+            alt={displayDetails.Title}
+            className="img-fluid rounded shadow"
+            onError={(e) => {
+              e.target.src = "/placeholder-movie.jpg";
+            }}
+          />
+        </Col>
+        <Col md={8}>
           <div className="mb-3">
-            <strong>Genres:</strong> {movie.Genre}
+            <Badge bg="primary" className="me-2">
+              {displayDetails.Year}
+            </Badge>
+            <Badge bg="success" className="me-2">
+              ⭐ {displayDetails.imdbRating || "N/A"}
+            </Badge>
+            <Badge bg="info" className="me-2">
+              {displayDetails.Rated || "Not Rated"}
+            </Badge>
+            <Badge bg="secondary">{displayDetails.Type || "Movie"}</Badge>
           </div>
-        )}
 
-        {movie.Runtime && (
-          <div className="mb-3">
-            <strong>Runtime:</strong> {movie.Runtime}
-          </div>
-        )}
+          <h5>Overview</h5>
+          <p className="mb-4">
+            {displayDetails.Plot || "No overview available."}
+          </p>
 
-        {movie.Director && movie.Director !== "N/A" && (
-          <div className="mb-3">
-            <strong>Director:</strong> {movie.Director}
-          </div>
-        )}
+          {displayDetails.Genre && displayDetails.Genre !== "N/A" && (
+            <div className="mb-3">
+              <strong>Genres:</strong> {displayDetails.Genre}
+            </div>
+          )}
 
-        {movie.Actors && movie.Actors !== "N/A" && (
-          <div className="mb-3">
-            <strong>Cast:</strong> {movie.Actors}
-          </div>
-        )}
+          {displayDetails.Runtime && displayDetails.Runtime !== "N/A" && (
+            <div className="mb-3">
+              <strong>Runtime:</strong> {displayDetails.Runtime}
+            </div>
+          )}
 
-        {movie.imdbID && (
-          <div className="mb-3">
-            <strong>IMDb ID:</strong> {movie.imdbID}
-          </div>
-        )}
-      </Col>
-    </Row>
-  );
+          {displayDetails.Director && displayDetails.Director !== "N/A" && (
+            <div className="mb-3">
+              <strong>Director:</strong> {displayDetails.Director}
+            </div>
+          )}
+
+          {displayDetails.Actors && displayDetails.Actors !== "N/A" && (
+            <div className="mb-3">
+              <strong>Cast:</strong> {displayDetails.Actors}
+            </div>
+          )}
+
+          {displayDetails.Language && displayDetails.Language !== "N/A" && (
+            <div className="mb-3">
+              <strong>Language:</strong> {displayDetails.Language}
+            </div>
+          )}
+
+          {displayDetails.Country && displayDetails.Country !== "N/A" && (
+            <div className="mb-3">
+              <strong>Country:</strong> {displayDetails.Country}
+            </div>
+          )}
+
+          {displayDetails.Awards && displayDetails.Awards !== "N/A" && (
+            <div className="mb-3">
+              <strong>Awards:</strong> {displayDetails.Awards}
+            </div>
+          )}
+
+          {displayDetails.imdbID && (
+            <div className="mb-3">
+              <strong>IMDb ID:</strong> {displayDetails.imdbID}
+            </div>
+          )}
+        </Col>
+      </Row>
+    );
+  };
 
   return (
     <Container className="my-4">
@@ -301,7 +342,7 @@ const MovieSearch = () => {
         <Col>
           <h1 className="text-center mb-4">🎬 Movie Search</h1>
           <p className="text-center text-muted mb-4">
-            Discover movies and share your reviews with our community
+            Discover movies using OMDb API and share your reviews
           </p>
 
           <SearchBar
@@ -390,7 +431,7 @@ const MovieSearch = () => {
               className="mb-3"
             >
               <Tab eventKey="details" title="🎬 Details">
-                <MovieDetails movie={selectedMovie} />
+                <MovieDetails movie={selectedMovie} details={movieDetails} />
               </Tab>
 
               <Tab eventKey="reviews" title={`📝 Reviews (${reviews.length})`}>

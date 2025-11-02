@@ -152,16 +152,16 @@ export const testBackendConnection = async () => {
   }
 };
 
-// Movie API calls with enhanced data handling
+// Movie API calls using OMDb structure
 export const movieAPI = {
   getPopular: async () => {
     try {
       const response = await api.get("/movies/popular");
       const data = extractData(response);
 
-      // Handle different movie data structures
-      if (data && data.results) {
-        return data.results; // TMDB-style structure
+      // Handle OMDb-style response structure
+      if (data && data.Search && Array.isArray(data.Search)) {
+        return data.Search; // OMDb search results
       }
       if (Array.isArray(data)) {
         return data; // Direct array
@@ -174,7 +174,6 @@ export const movieAPI = {
       return data || [];
     } catch (error) {
       console.error("Failed to fetch popular movies:", error);
-      // Return empty array as fallback
       return [];
     }
   },
@@ -186,8 +185,17 @@ export const movieAPI = {
       );
       const data = extractData(response);
 
-      if (data && data.results) {
-        return data.results;
+      // Handle OMDb search response
+      if (data && data.Search && Array.isArray(data.Search)) {
+        return data.Search.map((movie) => ({
+          ...movie,
+          imdbID: movie.imdbID,
+          Title: movie.Title,
+          Year: movie.Year,
+          Type: movie.Type,
+          Poster:
+            movie.Poster !== "N/A" ? movie.Poster : "/placeholder-movie.jpg",
+        }));
       }
       if (Array.isArray(data)) {
         return data;
@@ -203,10 +211,84 @@ export const movieAPI = {
   getDetails: async (id) => {
     try {
       const response = await api.get(`/movies/${id}`);
-      return extractData(response);
+      const data = extractData(response);
+
+      // Handle OMDb movie details structure
+      if (data && data.imdbID) {
+        return {
+          imdbID: data.imdbID,
+          Title: data.Title,
+          Year: data.Year,
+          Rated: data.Rated,
+          Released: data.Released,
+          Runtime: data.Runtime,
+          Genre: data.Genre,
+          Director: data.Director,
+          Writer: data.Writer,
+          Actors: data.Actors,
+          Plot: data.Plot,
+          Language: data.Language,
+          Country: data.Country,
+          Awards: data.Awards,
+          Poster:
+            data.Poster !== "N/A" ? data.Poster : "/placeholder-movie.jpg",
+          Ratings: data.Ratings || [],
+          Metascore: data.Metascore,
+          imdbRating: data.imdbRating,
+          imdbVotes: data.imdbVotes,
+          Type: data.Type,
+          DVD: data.DVD,
+          BoxOffice: data.BoxOffice,
+          Production: data.Production,
+          Website: data.Website,
+          Response: data.Response,
+        };
+      }
+
+      return data;
     } catch (error) {
       console.error("Failed to fetch movie details:", error);
       return null;
+    }
+  },
+
+  // New method to get movies by year
+  getByYear: async (year) => {
+    try {
+      const response = await api.get(`/movies/year/${year}`);
+      const data = extractData(response);
+
+      if (data && data.Search && Array.isArray(data.Search)) {
+        return data.Search;
+      }
+      if (Array.isArray(data)) {
+        return data;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error(`Failed to fetch movies for year ${year}:`, error);
+      return [];
+    }
+  },
+
+  // New method to get movies by genre
+  getByGenre: async (genre) => {
+    try {
+      const response = await api.get(`/movies/genre/${genre}`);
+      const data = extractData(response);
+
+      if (data && data.Search && Array.isArray(data.Search)) {
+        return data.Search;
+      }
+      if (Array.isArray(data)) {
+        return data;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error(`Failed to fetch movies for genre ${genre}:`, error);
+      return [];
     }
   },
 };
@@ -261,6 +343,36 @@ export const restaurantAPI = {
     } catch (error) {
       console.error("Failed to fetch restaurant details:", error);
       return null;
+    }
+  },
+
+  create: async (restaurantData) => {
+    try {
+      const response = await api.post("/restaurants", restaurantData);
+      return extractData(response);
+    } catch (error) {
+      console.error("Failed to create restaurant:", error);
+      throw error;
+    }
+  },
+
+  update: async (id, restaurantData) => {
+    try {
+      const response = await api.put(`/restaurants/${id}`, restaurantData);
+      return extractData(response);
+    } catch (error) {
+      console.error(`Failed to update restaurant ${id}:`, error);
+      throw error;
+    }
+  },
+
+  delete: async (id) => {
+    try {
+      const response = await api.delete(`/restaurants/${id}`);
+      return extractData(response);
+    } catch (error) {
+      console.error(`Failed to delete restaurant ${id}:`, error);
+      throw error;
     }
   },
 };
