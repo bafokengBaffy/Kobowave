@@ -70,15 +70,6 @@ app.get("/api/reviews", (req, res) => {
         date: "2024-01-14",
         type: "restaurant",
       },
-      {
-        id: 3,
-        title: "Wonderful Film",
-        content: "One of the best movies I've seen this year.",
-        rating: 5,
-        author: "Mike Johnson",
-        date: "2024-01-13",
-        type: "movie",
-      },
     ];
 
     res.json({
@@ -106,9 +97,7 @@ app.get("/api/movies/popular", (req, res) => {
         year: "1999",
         rating: 8.7,
         genre: "Sci-Fi, Action",
-        description:
-          "A computer hacker learns from mysterious rebels about the true nature of his reality and his role in the war against its controllers.",
-        duration: "136 min",
+        poster_path: "/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg",
       },
       {
         id: 2,
@@ -116,29 +105,7 @@ app.get("/api/movies/popular", (req, res) => {
         year: "2010",
         rating: 8.8,
         genre: "Action, Sci-Fi, Thriller",
-        description:
-          "A thief who steals corporate secrets through the use of dream-sharing technology is given the inverse task of planting an idea into the mind of a C.E.O.",
-        duration: "148 min",
-      },
-      {
-        id: 3,
-        title: "The Shawshank Redemption",
-        year: "1994",
-        rating: 9.3,
-        genre: "Drama",
-        description:
-          "Two imprisoned men bond over a number of years, finding solace and eventual redemption through acts of common decency.",
-        duration: "142 min",
-      },
-      {
-        id: 4,
-        title: "The Dark Knight",
-        year: "2008",
-        rating: 9.0,
-        genre: "Action, Crime, Drama",
-        description:
-          "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests of his ability to fight injustice.",
-        duration: "152 min",
+        poster_path: "/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg",
       },
     ];
 
@@ -167,10 +134,6 @@ app.get("/api/restaurants", (req, res) => {
         cuisine: "Italian",
         rating: 4.5,
         address: "123 Main Street, Cityville",
-        phone: "+1 555-0101",
-        hours: "11:00 AM - 10:00 PM",
-        description:
-          "Authentic Italian cuisine with fresh ingredients and traditional recipes.",
       },
       {
         id: 2,
@@ -178,31 +141,6 @@ app.get("/api/restaurants", (req, res) => {
         cuisine: "Japanese",
         rating: 4.8,
         address: "456 Oak Avenue, Townsville",
-        phone: "+1 555-0102",
-        hours: "12:00 PM - 11:00 PM",
-        description:
-          "Fresh sushi and traditional Japanese dishes in a modern setting.",
-      },
-      {
-        id: 3,
-        name: "Burger Hub",
-        cuisine: "American",
-        rating: 4.2,
-        address: "789 Pine Road, Villagetown",
-        phone: "+1 555-0103",
-        hours: "10:00 AM - 12:00 AM",
-        description: "Gourmet burgers and craft beers in a casual atmosphere.",
-      },
-      {
-        id: 4,
-        name: "Spice Garden",
-        cuisine: "Indian",
-        rating: 4.6,
-        address: "321 Maple Lane, Citycenter",
-        phone: "+1 555-0104",
-        hours: "11:30 AM - 10:30 PM",
-        description:
-          "Traditional Indian cuisine with authentic spices and flavors.",
       },
     ];
 
@@ -235,7 +173,7 @@ app.post("/api/reviews", (req, res) => {
     }
 
     const newReview = {
-      id: Date.now(), // Simple ID generation
+      id: Date.now(),
       title,
       content,
       rating: parseInt(rating),
@@ -275,7 +213,6 @@ app.get("/", (req, res) => {
       movies: "/api/movies/popular",
       restaurants: "/api/restaurants",
     },
-    description: "Movie and Restaurant Review Platform",
   });
 });
 
@@ -295,9 +232,9 @@ app.use((req, res) => {
   });
 });
 
-// ERROR HANDLER
+// GLOBAL ERROR HANDLER - Critical for production
 app.use((error, req, res, next) => {
-  console.error("Server Error:", error);
+  console.error("🚨 Global Error Handler:", error);
   res.status(500).json({
     success: false,
     error: "Internal server error",
@@ -308,10 +245,22 @@ app.use((error, req, res, next) => {
   });
 });
 
-// START SERVER
+// START SERVER - Production ready
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, "0.0.0.0", () => {
+// Graceful shutdown handler
+process.on("SIGTERM", () => {
+  console.log("SIGTERM received, shutting down gracefully");
+  process.exit(0);
+});
+
+process.on("SIGINT", () => {
+  console.log("SIGINT received, shutting down gracefully");
+  process.exit(0);
+});
+
+// Start server with error handling
+const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`\n🎉 KOBOWAVES BACKEND SERVER STARTED SUCCESSFULLY!`);
   console.log(`📍 Port: ${PORT}`);
   console.log(`🌐 Environment: ${process.env.NODE_ENV || "development"}`);
@@ -325,6 +274,14 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`   • GET  /api/restaurants - Restaurant listings`);
   console.log(`\n🔥 CORS: Enabled for ALL origins`);
   console.log(`📡 Ready to accept requests from your frontend!`);
+});
+
+// Handle server errors
+server.on("error", (error) => {
+  console.error("🚨 Server error:", error);
+  if (error.code === "EADDRINUSE") {
+    console.log(`Port ${PORT} is already in use`);
+  }
 });
 
 module.exports = app;
