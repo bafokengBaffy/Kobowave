@@ -4,44 +4,33 @@ const admin = require("firebase-admin");
 const initializeFirebase = () => {
   if (!admin.apps.length) {
     try {
-      let serviceAccount;
+      console.log("Using environment variables for Firebase configuration");
 
-      // Check for environment variables first (for production)
+      // Debug log to check private key
       if (process.env.FIREBASE_PRIVATE_KEY) {
-        console.log("Using environment variables for Firebase configuration");
-
-        serviceAccount = {
-          type: "service_account",
-          project_id: process.env.FIREBASE_PROJECT_ID || "kobowave",
-          private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-          client_email: process.env.FIREBASE_CLIENT_EMAIL,
-          client_id: process.env.FIREBASE_CLIENT_ID,
-          auth_uri: "https://accounts.google.com/o/oauth2/auth",
-          token_uri: "https://oauth2.googleapis.com/token",
-          auth_provider_x509_cert_url:
-            "https://www.googleapis.com/oauth2/v1/certs",
-          client_x509_cert_url: process.env.FIREBASE_CLIENT_CERT_URL,
-          universe_domain: "googleapis.com",
-        };
-      } else {
-        // For local development - try to use service account file
-        console.log("Using service account file for Firebase configuration");
-
-        // Try to require the service account file
-        try {
-          serviceAccount = require("../config/firebase-service-account.json");
-        } catch (fileError) {
-          throw new Error(
-            "Firebase service account file not found and no environment variables configured. " +
-              "Please set FIREBASE_PRIVATE_KEY environment variable or add service account file."
-          );
-        }
+        console.log(
+          "Private key found, length:",
+          process.env.FIREBASE_PRIVATE_KEY.length
+        );
+        console.log(
+          "First 100 chars:",
+          process.env.FIREBASE_PRIVATE_KEY.substring(0, 100)
+        );
       }
 
-      // Validate required service account fields
-      if (!serviceAccount.project_id) {
-        throw new Error("Firebase project ID is required");
-      }
+      const serviceAccount = {
+        type: "service_account",
+        project_id: process.env.FIREBASE_PROJECT_ID || "kobowave",
+        private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+        client_email: process.env.FIREBASE_CLIENT_EMAIL,
+        client_id: process.env.FIREBASE_CLIENT_ID,
+        auth_uri: "https://accounts.google.com/o/oauth2/auth",
+        token_uri: "https://oauth2.googleapis.com/token",
+        auth_provider_x509_cert_url:
+          "https://www.googleapis.com/oauth2/v1/certs",
+        client_x509_cert_url: process.env.FIREBASE_CLIENT_CERT_URL,
+        universe_domain: "googleapis.com",
+      };
 
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
@@ -53,6 +42,7 @@ const initializeFirebase = () => {
       return admin;
     } catch (error) {
       console.error("❌ Firebase initialization failed:", error.message);
+      console.error("Error details:", error);
       throw error;
     }
   }
@@ -65,7 +55,6 @@ const db = firebaseApp.firestore();
 // Auto-create collections if they don't exist
 const initializeCollections = async () => {
   const collections = ["reviews", "movies", "restaurants", "users"];
-
   console.log("🔄 Initializing Firebase collections...");
 
   for (const collectionName of collections) {
@@ -75,16 +64,13 @@ const initializeCollections = async () => {
 
       if (snapshot.empty) {
         console.log(`✅ Created collection: ${collectionName}`);
-        // Use regular Date instead of serverTimestamp for initialization
         await collectionRef.doc("init").set({
           initialized: true,
           createdAt: new Date().toISOString(),
           message: `Collection ${collectionName} initialized`,
         });
       } else {
-        console.log(
-          `✅ Collection exists: ${collectionName} (${snapshot.size} documents)`
-        );
+        console.log(`✅ Collection exists: ${collectionName}`);
       }
     } catch (error) {
       console.error(
@@ -93,21 +79,17 @@ const initializeCollections = async () => {
       );
     }
   }
-
   console.log("✅ All collections initialized");
 };
 
 // Helper function to convert Firestore data to plain objects
 const convertFirestoreTimestamps = (data) => {
   if (!data) return data;
-
   const converted = { ...data };
 
-  // Convert Firestore Timestamps to ISO strings
   if (converted.createdAt && typeof converted.createdAt.toDate === "function") {
     converted.createdAt = converted.createdAt.toDate().toISOString();
   }
-
   if (converted.updatedAt && typeof converted.updatedAt.toDate === "function") {
     converted.updatedAt = converted.updatedAt.toDate().toISOString();
   }
