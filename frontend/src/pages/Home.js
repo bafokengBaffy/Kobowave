@@ -10,6 +10,7 @@ import {
   Spinner,
 } from "react-bootstrap";
 import { LinkContainer } from "react-router-bootstrap";
+import ReviewCard from "../components/ReviewCard";
 import { db } from "../config/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { movieAPI, restaurantAPI, reviewAPI } from "../services/api";
@@ -30,6 +31,7 @@ const Home = () => {
 
   const features = [
     {
+      id: "feature-movies",
       icon: "🎬",
       title: "Movie Reviews",
       description:
@@ -39,6 +41,7 @@ const Home = () => {
       variant: "primary",
     },
     {
+      id: "feature-restaurants",
       icon: "🍽️",
       title: "Restaurant Reviews",
       description: "Find and review great restaurants in your area.",
@@ -47,6 +50,7 @@ const Home = () => {
       variant: "success",
     },
     {
+      id: "feature-community",
       icon: "⭐",
       title: "Community Reviews",
       description: "Read reviews from our community of food and movie lovers.",
@@ -75,24 +79,68 @@ const Home = () => {
           getDocs(collection(db, "users")),
         ]);
 
+        console.log("Movies API Response:", moviesResponse.data);
+        console.log("Restaurants API Response:", restaurantsResponse.data);
+        console.log("Reviews API Response:", reviewsResponse.data);
+
         // Process reviews data
-        const allReviews = reviewsResponse.data.data || [];
+        const allReviews = reviewsResponse.data?.data || [];
         setRecentReviews(allReviews.slice(0, 3)); // Show 3 most recent reviews
 
-        // Process movies data
-        const moviesData = moviesResponse.data.data?.results || [];
-        setPopularMovies(moviesData.slice(0, 6)); // Show 6 popular movies
+        // Process movies data - handle both TMDB and OMDB formats and remove duplicates
+        const moviesData =
+          moviesResponse.data?.data?.results || moviesResponse.data?.data || [];
+        console.log("Raw movies data:", moviesData);
+
+        // Remove duplicate movies based on imdbID or title
+        const uniqueMoviesMap = new Map();
+
+        moviesData.forEach((movie, index) => {
+          // Handle different movie data structures
+          const movieData = {
+            // TMDB format
+            id: movie.id,
+            title: movie.title || movie.Title,
+            poster_path: movie.poster_path,
+            release_date: movie.release_date || movie.Year,
+            vote_average: movie.vote_average,
+            // OMDB format fallbacks
+            Poster: movie.Poster,
+            Year: movie.Year,
+            Type: movie.Type,
+            imdbID: movie.imdbID,
+            // Ensure unique ID
+            uniqueId: movie.id
+              ? `movie-${movie.id}`
+              : movie.imdbID
+              ? `movie-${movie.imdbID}-${index}`
+              : `movie-temp-${index}-${Date.now()}`,
+          };
+
+          // Use imdbID as key if available, otherwise use title + year
+          const uniqueKey =
+            movie.imdbID ||
+            `${movie.title || movie.Title}-${movie.Year || index}`;
+
+          if (!uniqueMoviesMap.has(uniqueKey)) {
+            uniqueMoviesMap.set(uniqueKey, movieData);
+          }
+        });
+
+        const uniqueMovies = Array.from(uniqueMoviesMap.values());
+        const popularMoviesSlice = uniqueMovies.slice(0, 6);
+
+        setPopularMovies(popularMoviesSlice);
+        console.log("Processed unique movies:", popularMoviesSlice);
 
         // Process restaurants data
-        const restaurantsData = restaurantsResponse.data.data || [];
-        setFeaturedRestaurants(restaurantsData.slice(0, 3)); // Show 3 featured restaurants
+        const restaurantsData = restaurantsResponse.data?.data || [];
+        console.log("Restaurants data:", restaurantsData);
+        setFeaturedRestaurants(restaurantsData.slice(0, 3));
 
         // Calculate stats
         const movieReviews = allReviews.filter(
           (review) => review.type === "movie"
-        ).length;
-        const restaurantReviews = allReviews.filter(
-          (review) => review.type === "restaurant"
         ).length;
         const totalUsers = usersSnapshot.size;
 
@@ -115,73 +163,96 @@ const Home = () => {
     fetchHomeData();
   }, []);
 
-  const ReviewCard = ({ review }) => (
-    <Card className="h-100">
-      <Card.Body>
-        <div className="d-flex align-items-center mb-2">
-          <span className="me-2">{review.type === "movie" ? "🎬" : "🍽️"}</span>
-          <small className="text-muted">{review.type}</small>
-        </div>
-        <Card.Title className="h6">{review.itemTitle}</Card.Title>
-        <Card.Text className="small text-muted">
-          {review.content.length > 100
-            ? `${review.content.substring(0, 100)}...`
-            : review.content}
-        </Card.Text>
-        <div className="d-flex justify-content-between align-items-center">
-          <span className="text-warning">{"⭐".repeat(review.rating)}</span>
-          <small className="text-muted">by {review.author}</small>
-        </div>
-      </Card.Body>
-    </Card>
-  );
+  const MovieCard = ({ movie }) => {
+    // Determine image source based on available data
+    const getImageSrc = () => {
+      if (movie.poster_path) {
+        return `https://image.tmdb.org/t/p/w200${movie.poster_path}`;
+      }
+      if (movie.Poster && movie.Poster !== "N/A") {
+        return movie.Poster;
+      }
+      return "/placeholder-movie.jpg";
+    };
 
-  const MovieCard = ({ movie }) => (
-    <Card className="h-100">
-      <Card.Img
-        variant="top"
-        src={
-          movie.poster_path
-            ? `https://image.tmdb.org/t/p/w200${movie.poster_path}`
-            : "/placeholder-movie.jpg"
-        }
-        style={{ height: "150px", objectFit: "cover" }}
-        onError={(e) => {
-          e.target.src = "/placeholder-movie.jpg";
-        }}
-      />
-      <Card.Body>
-        <Card.Title className="h6">{movie.title}</Card.Title>
-        <div className="d-flex justify-content-between align-items-center">
-          <small className="text-muted">
-            {movie.release_date
-              ? new Date(movie.release_date).getFullYear()
-              : "N/A"}
-          </small>
-          <small className="text-warning">
-            ⭐ {movie.vote_average?.toFixed(1)}
-          </small>
-        </div>
-      </Card.Body>
-    </Card>
-  );
+    // Determine title
+    const getTitle = () => {
+      return movie.title || movie.Title || "Unknown Title";
+    };
 
-  const RestaurantCard = ({ restaurant }) => (
-    <Card className="h-100">
-      <Card.Body>
-        <Card.Title className="h6">{restaurant.name}</Card.Title>
-        <Card.Text className="small text-muted mb-2">
-          {restaurant.cuisine} • {restaurant.priceRange}
-        </Card.Text>
-        <Card.Text className="small text-muted mb-2">
-          📍 {restaurant.location}
-        </Card.Text>
-        <div className="text-warning">
-          {"⭐".repeat(Math.floor(restaurant.rating))}
-        </div>
-      </Card.Body>
-    </Card>
-  );
+    // Determine year
+    const getYear = () => {
+      if (movie.release_date) {
+        return new Date(movie.release_date).getFullYear();
+      }
+      if (movie.Year) {
+        return movie.Year;
+      }
+      return "N/A";
+    };
+
+    // Determine rating
+    const getRating = () => {
+      if (movie.vote_average) {
+        return movie.vote_average.toFixed(1);
+      }
+      return "N/A";
+    };
+
+    return (
+      <Card className="h-100 shadow-sm">
+        <Card.Img
+          variant="top"
+          src={getImageSrc()}
+          style={{ height: "200px", objectFit: "cover" }}
+          onError={(e) => {
+            e.target.src = "/placeholder-movie.jpg";
+          }}
+        />
+        <Card.Body className="d-flex flex-column">
+          <Card.Title className="h6 flex-grow-1" style={{ fontSize: "0.9rem" }}>
+            {getTitle()}
+          </Card.Title>
+          <div className="d-flex justify-content-between align-items-center mt-auto">
+            <small className="text-muted">{getYear()}</small>
+            <small className="text-warning">⭐ {getRating()}</small>
+          </div>
+        </Card.Body>
+      </Card>
+    );
+  };
+
+  const RestaurantCard = ({ restaurant }) => {
+    // Handle different restaurant data structures
+    const restaurantData = {
+      id: restaurant.id,
+      name: restaurant.name || "Unknown Restaurant",
+      cuisine: restaurant.cuisine || restaurant.type || "Various",
+      priceRange: restaurant.priceRange || restaurant.price_range || "$$",
+      location:
+        restaurant.location || restaurant.address || "Location not specified",
+      rating: restaurant.rating || restaurant.average_rating || 0,
+    };
+
+    return (
+      <Card className="h-100 shadow-sm">
+        <Card.Body className="d-flex flex-column">
+          <Card.Title className="h6">{restaurantData.name}</Card.Title>
+          <Card.Text className="small text-muted mb-2 flex-grow-1">
+            {restaurantData.cuisine} • {restaurantData.priceRange}
+          </Card.Text>
+          <Card.Text className="small text-muted mb-2">
+            📍 {restaurantData.location}
+          </Card.Text>
+          <div className="text-warning mt-auto">
+            {"⭐".repeat(Math.floor(restaurantData.rating))}
+            {restaurantData.rating % 1 !== 0 && "☆"}
+            <span className="text-muted ms-1">({restaurantData.rating})</span>
+          </div>
+        </Card.Body>
+      </Card>
+    );
+  };
 
   if (loading) {
     return (
@@ -201,9 +272,9 @@ const Home = () => {
   return (
     <div className="home-page">
       {/* Hero Section */}
-      <section className="hero-section">
+      <section className="hero-section bg-primary text-white py-5">
         <Container>
-          <Row className="align-items-center min-vh-50">
+          <Row className="align-items-center">
             <Col lg={6}>
               <h1 className="display-4 fw-bold mb-4">
                 Welcome to <span className="text-warning">Kobo</span>
@@ -277,7 +348,7 @@ const Home = () => {
       </section>
 
       {error && (
-        <Container>
+        <Container className="mt-4">
           <Alert variant="warning" className="text-center">
             {error}
           </Alert>
@@ -296,8 +367,8 @@ const Home = () => {
             </Col>
           </Row>
           <Row>
-            {features.map((feature, index) => (
-              <Col md={4} key={index} className="mb-4">
+            {features.map((feature) => (
+              <Col md={4} key={feature.id} className="mb-4">
                 <Card className="h-100 border-0 shadow-sm feature-card">
                   <Card.Body className="text-center p-4">
                     <div
@@ -342,7 +413,12 @@ const Home = () => {
           {recentReviews.length > 0 ? (
             <Row>
               {recentReviews.map((review, index) => (
-                <Col lg={4} md={6} key={index} className="mb-4">
+                <Col
+                  lg={4}
+                  md={6}
+                  key={review.id || `review-${index}-${Date.now()}`}
+                  className="mb-4"
+                >
                   <ReviewCard review={review} />
                 </Col>
               ))}
@@ -361,7 +437,7 @@ const Home = () => {
           <Row className="mb-4">
             <Col>
               <h2 className="fw-bold">Popular Movies</h2>
-              <p className="text-muted">Trending movies from TMDB</p>
+              <p className="text-muted">Trending movies from our collection</p>
             </Col>
             <Col xs="auto">
               <LinkContainer to="/movies">
@@ -374,14 +450,21 @@ const Home = () => {
           {popularMovies.length > 0 ? (
             <Row>
               {popularMovies.map((movie) => (
-                <Col lg={2} md={4} sm={6} key={movie.id} className="mb-4">
+                <Col lg={2} md={4} sm={6} key={movie.uniqueId} className="mb-4">
                   <MovieCard movie={movie} />
                 </Col>
               ))}
             </Row>
           ) : (
             <Alert variant="info" className="text-center">
-              Loading popular movies...
+              <div>
+                <p>No movies available at the moment.</p>
+                <LinkContainer to="/movies">
+                  <Button variant="primary" size="sm">
+                    Browse Movies
+                  </Button>
+                </LinkContainer>
+              </div>
             </Alert>
           )}
         </Container>
@@ -405,15 +488,27 @@ const Home = () => {
           </Row>
           {featuredRestaurants.length > 0 ? (
             <Row>
-              {featuredRestaurants.map((restaurant) => (
-                <Col lg={4} md={6} key={restaurant.id} className="mb-4">
+              {featuredRestaurants.map((restaurant, index) => (
+                <Col
+                  lg={4}
+                  md={6}
+                  key={restaurant.id || `restaurant-${index}-${Date.now()}`}
+                  className="mb-4"
+                >
                   <RestaurantCard restaurant={restaurant} />
                 </Col>
               ))}
             </Row>
           ) : (
             <Alert variant="info" className="text-center">
-              Loading featured restaurants...
+              <div>
+                <p>No restaurants available at the moment.</p>
+                <LinkContainer to="/restaurants">
+                  <Button variant="success" size="sm">
+                    Browse Restaurants
+                  </Button>
+                </LinkContainer>
+              </div>
             </Alert>
           )}
         </Container>
